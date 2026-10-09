@@ -2,6 +2,8 @@ import { existsSync, readFileSync, renameSync, rmSync, unlinkSync } from "fs";
 import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 
+import { z } from "zod";
+
 import { loadAllAssistants } from "../lib/assistant-config.js";
 import {
   canPromptForConfirmation,
@@ -23,11 +25,12 @@ interface DeleteTarget {
 
 /**
  * Owning packages a global install of the CLI can live under, in priority
- * order — @mycadet/cli always wins over its meta wrapper.
+ * order — the top-level `mycadet` install root wins over its nested
+ * `@mycadet/cli` copy, so the whole global install goes with it.
  */
 const OWNED_PACKAGE_NAMES: ReadonlyArray<string> = [
+  "mycadet",
   "@mycadet/cli",
-  "@mycadet/meta",
 ];
 
 /**
@@ -44,22 +47,17 @@ function findInstalledPackageRoot(startDir: string): string | null {
     if (parent === dir) break; // Reached the filesystem root.
   }
   // Pass 2: walk up looking for the owned package root, priority order —
-  // the whole chain is checked for each name in turn, so @mycadet/cli wins
-  // over @mycadet/meta wherever both appear.
+  // the whole chain is checked for each name in turn, so the top-level
+  // `mycadet` root wins over the nested @mycadet/cli copy.
   for (const owned of OWNED_PACKAGE_NAMES) {
     for (let dir = startDir; ; dir = dirname(dir)) {
       const pkgPath = join(dir, "package.json");
       if (existsSync(pkgPath)) {
         try {
-          const parsed: unknown = JSON.parse(readFileSync(pkgPath, "utf8"));
-          if (
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "name" in parsed &&
-            parsed.name === owned
-          ) {
-            return dir;
-          }
+          const parsed = z
+            .object({ name: z.string() })
+            .safeParse(JSON.parse(readFileSync(pkgPath, "utf8")));
+          if (parsed.success && parsed.data.name === owned) return dir;
         } catch {
           // Unreadable package.json — keep walking up.
         }
