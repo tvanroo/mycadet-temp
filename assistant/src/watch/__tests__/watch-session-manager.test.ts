@@ -269,7 +269,7 @@ describe("watch session manager", () => {
     await settle();
 
     expect(options).toHaveLength(1);
-    expect("captureTarget" in options[0]!).toBe(false);
+    expect(options[0]!.captureTarget).toBeUndefined();
 
     manager.stop();
   });

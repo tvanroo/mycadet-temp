@@ -437,13 +437,9 @@ export class RuntimeHttpServer {
             const session = new WatchStreamSession(ws, {
               mimeType: watchData.mimeType,
               sampleRate: watchData.sampleRate,
-              ...(watchData.conversationId
-                ? { conversationId: watchData.conversationId }
-                : {}),
-              ...(watchData.clientId ? { clientId: watchData.clientId } : {}),
-              ...(watchData.captureTarget
-                ? { captureTarget: watchData.captureTarget }
-                : {}),
+              conversationId: watchData.conversationId,
+              clientId: watchData.clientId,
+              captureTarget: watchData.captureTarget,
             });
             watchData.session = session;
             activeWatchStreamSessions.set(watchData.sessionId, session);

@@ -466,10 +466,8 @@ export class WatchSessionManager {
       const observation = await this.observe({
         sourceActorPrincipalId: session.sourceActorPrincipalId,
         timeoutMs: OBSERVE_TIMEOUT_MS,
-        ...(session.clientId ? { clientId: session.clientId } : {}),
-        ...(session.captureTarget
-          ? { captureTarget: session.captureTarget }
-          : {}),
+        clientId: session.clientId,
+        captureTarget: session.captureTarget,
         // The helper's diff state is this session's alone, so its first
         // observation is never described against the last session's.
         stateKey: `watch:${session.sessionId}`,

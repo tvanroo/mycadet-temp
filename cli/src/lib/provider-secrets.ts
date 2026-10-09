@@ -1,4 +1,21 @@
+import { EventEmitter } from "node:events";
+import { z } from "zod";
+
 import { LLM_PROVIDER_ENV_VAR_NAMES } from "../shared/provider-env-vars.js";
+
+/** The stdin slice the prompt helpers touch, so fakes need no casts. */
+type SecretPromptInput = EventEmitter & {
+  readonly isTTY?: boolean | undefined;
+  readonly isRaw?: boolean | undefined;
+  setRawMode(mode: boolean): void;
+  pause(): void;
+  resume(): void;
+};
+
+/** The stdout slice: prompts and newlines. */
+type SecretPromptOutput = {
+  write(text: string): void;
+};
 
 export type LlmProviderId = keyof typeof LLM_PROVIDER_ENV_VAR_NAMES;
 
@@ -41,8 +58,8 @@ export interface EnsureProviderApiKeyOptions {
   fetchImpl?: ProviderSecretFetch;
   prompt?: (prompt: string) => Promise<string>;
   stdinIsTTY?: boolean;
-  input?: NodeJS.ReadStream;
-  output?: NodeJS.WriteStream;
+  input?: SecretPromptInput;
+  output?: SecretPromptOutput;
   /** Key collected before startup, right after the provider choice. */
   precollectedKey?: string;
 }
@@ -61,8 +78,8 @@ export interface HatchProviderApiKeyOptions {
   log?: (message: string) => void;
   prompt?: (prompt: string) => Promise<string>;
   stdinIsTTY?: boolean;
-  input?: NodeJS.ReadStream;
-  output?: NodeJS.WriteStream;
+  input?: SecretPromptInput;
+  output?: SecretPromptOutput;
   /** Key collected before startup, right after the provider choice. */
   precollectedKey?: string;
 }
@@ -302,11 +319,13 @@ async function parseErrorMessage(response: Response): Promise<string> {
   }
 
   try {
-    const body = JSON.parse(text) as {
-      error?: unknown;
-    };
-    const message = extractErrorMessage(body.error);
-    if (message) return message;
+    const parsed = z
+      .object({ error: z.unknown() })
+      .safeParse(JSON.parse(text));
+    if (parsed.success) {
+      const message = extractErrorMessage(parsed.data.error);
+      if (message) return message;
+    }
   } catch {
     // Fall back to raw text below.
   }
@@ -326,9 +345,8 @@ function extractErrorMessage(error: unknown): string | null {
     return null;
   }
 
-  const maybeMessage = (error as { message?: unknown }).message;
-  if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
-    return maybeMessage.trim();
+  if ("message" in error && typeof error.message === "string") {
+    return error.message.trim() || null;
   }
 
   return null;
@@ -366,10 +384,13 @@ export async function readGatewayApiKey(
     );
   }
 
-  const body = (await response.json()) as {
-    found?: unknown;
-    unreachable?: unknown;
-  };
+  const body = z
+    .object({
+      found: z.boolean().optional(),
+      unreachable: z.boolean().optional(),
+    })
+    .catch({})
+    .parse(await response.json());
   return {
     found: body.found === true,
     unreachable: body.unreachable === true,
@@ -404,10 +425,13 @@ export async function injectGatewayApiKey(
     );
   }
 
-  const body = (await response.json().catch(() => ({}))) as {
-    success?: unknown;
-    error?: unknown;
-  };
+  const body = z
+    .object({
+      success: z.boolean().optional(),
+      error: z.unknown().optional(),
+    })
+    .catch({})
+    .parse(await response.json().catch(() => ({})));
   if (body.success === false) {
     const message =
       typeof body.error === "string" && body.error.trim().length > 0
@@ -420,8 +444,8 @@ export async function injectGatewayApiKey(
 export async function promptSecret(
   prompt: string,
   streams: {
-    input?: NodeJS.ReadStream;
-    output?: NodeJS.WriteStream;
+    input?: SecretPromptInput;
+    output?: SecretPromptOutput;
   } = {},
 ): Promise<string> {
   const input = streams.input ?? process.stdin;
@@ -503,7 +527,7 @@ export async function promptSecret(
 // pasted or piped input containing multiple lines isn't lost: any lines
 // beyond the first stay queued for the next readLine() call on the same
 // reader (see promptProviderChoice, which reuses one reader across retries).
-function createLineReader(input: NodeJS.ReadStream): {
+function createLineReader(input: SecretPromptInput): {
   readLine(): Promise<string>;
   dispose(): void;
 } {
@@ -573,8 +597,8 @@ function createLineReader(input: NodeJS.ReadStream): {
 export async function promptLine(
   prompt: string,
   streams: {
-    input?: NodeJS.ReadStream;
-    output?: NodeJS.WriteStream;
+    input?: SecretPromptInput;
+    output?: SecretPromptOutput;
   } = {},
 ): Promise<string> {
   const input = streams.input ?? process.stdin;
@@ -591,8 +615,8 @@ export async function promptLine(
 }
 
 export interface PromptProviderChoiceOptions {
-  input?: NodeJS.ReadStream;
-  output?: NodeJS.WriteStream;
+  input?: SecretPromptInput;
+  output?: SecretPromptOutput;
   choices?: readonly LlmProviderId[];
 }
 

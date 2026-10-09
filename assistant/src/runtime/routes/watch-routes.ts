@@ -331,13 +331,9 @@ export class WatchStreamSession {
         onObservation: () => {
           this.handleObservation();
         },
-        ...(this.options.conversationId
-          ? { conversationId: this.options.conversationId }
-          : {}),
-        ...(this.options.clientId ? { clientId: this.options.clientId } : {}),
-        ...(this.options.captureTarget
-          ? { captureTarget: this.options.captureTarget }
-          : {}),
+        conversationId: this.options.conversationId,
+        clientId: this.options.clientId,
+        captureTarget: this.options.captureTarget,
       });
       if (started.status !== "started") {
         this.failStart(
