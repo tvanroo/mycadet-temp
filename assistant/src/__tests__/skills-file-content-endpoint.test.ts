@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { setAllFlagsOnForTesting } from "../__tests__/feature-flag-test-helpers.js";
 import type { SkillSummary } from "../config/skills.js";
 import type { SlimSkillResponse } from "../daemon/message-types/skills.js";
 import type { SkillFileEntry } from "../skills/catalog-files.js";
@@ -91,10 +92,6 @@ mock.module("../config/skills.js", () => ({
 mock.module("../config/skill-state.js", () => ({
   resolveSkillStates: () => mockResolvedSkills,
   skillFlagKey: () => null,
-}));
-
-mock.module("../config/assistant-feature-flags.js", () => ({
-  isAssistantFeatureFlagEnabled: () => true,
 }));
 
 mock.module("../skills/catalog-cache.js", () => ({
@@ -263,12 +260,12 @@ mock.module("../providers/provider-send-message.js", () => ({
 // Real isTextMimeType — we want actual classification here.
 // No mock needed; let it fall through to the real implementation.
 
-let mockPlatformBaseUrl = "https://platform.test";
+let mockCloudBaseUrl = "https://platform.test";
 mock.module("../config/env.js", () => ({
-  getPlatformBaseUrl: () => mockPlatformBaseUrl,
+  getCloudBaseUrl: () => mockCloudBaseUrl,
 }));
 mock.module("../config/env.ts", () => ({
-  getPlatformBaseUrl: () => mockPlatformBaseUrl,
+  getCloudBaseUrl: () => mockCloudBaseUrl,
 }));
 
 mock.module("../daemon/handlers/shared.js", () => ({
@@ -332,9 +329,12 @@ function installedSkill(id: string, directoryPath: string) {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // Real flag resolution replaces the former blanket module mock.
+  setAllFlagsOnForTesting();
+
   originalFetch = globalThis.fetch;
   mockResolvedSkills = [];
-  mockPlatformBaseUrl = "https://platform.test";
+  mockCloudBaseUrl = "https://platform.test";
   providerReadCalls.length = 0;
   mockCadetProvider = makeNoopProvider("cadet");
   mockSkillsshProvider = makeNoopProvider("skillssh");

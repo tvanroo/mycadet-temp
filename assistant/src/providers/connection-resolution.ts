@@ -27,7 +27,7 @@
  *      a conversation offline.
  */
 
-import { getIsPlatform } from "../config/env-registry.js";
+import { getIsCloud } from "../config/env-registry.js";
 import {
   resolveCallSiteConfig,
   selectWinningProfile,
@@ -581,7 +581,7 @@ export async function resolveDefaultProvider(
       throw new ConnectionResolutionError(
         "<default>",
         "missing_connection",
-        `The resolved default config carries no provider_connection and no active connection exists for provider "${resolved.provider}". Connect a provider or point llm.defaultProvider at one with credentials.`,
+        `The resolved default config carries no provider_connection and no active connection exists for provider "${resolved.provider}". Connect a provider or point llm.default.provider at one with credentials.`,
       );
     }
   }
@@ -686,7 +686,7 @@ export async function preflightResolvedConfig(
     if (presence === "ok") {
       return;
     }
-    if (getIsPlatform()) {
+    if (getIsCloud()) {
       // A platform-managed assistant cannot present a login screen or switch
       // providers, so the login-or-switch wording never fits. An unreachable
       // store is transient and recovers on its own, so it reads as a retry. A
@@ -787,7 +787,7 @@ async function platformLoginPresence(): Promise<
   if (ctx.enabled) {
     return "ok";
   }
-  if (!ctx.platformBaseUrl) {
+  if (!ctx.cloudBaseUrl) {
     return "unauthenticated";
   }
   const presence = await checkCredentialPresence(

@@ -65,6 +65,7 @@ import {
   loadConfig,
   mergeDefaultWorkspaceConfig,
 } from "../config/loader.js";
+import { LLMSchema } from "../config/schemas/llm.js";
 import { seedInferenceProfiles } from "../config/seed-inference-profiles.js";
 import type { DrizzleDb } from "../persistence/db-connection.js";
 import { migrateCreateProviderConnections } from "../persistence/migrations/243-provider-connections.js";
@@ -610,9 +611,12 @@ describe("loadConfig startup behavior", () => {
     mergeDefaultConfigAndSeedInferenceProfiles(db);
     const config = loadConfig();
 
-    // `llm.default` is not part of the schema — the overlay blob stays on
-    // disk as inert user intent but never reaches the parsed config.
-    expect((config.llm as Record<string, unknown>).default).toBeUndefined();
+    // `llm.default` is the base blob — the overlay blob reaches the parsed
+    // config as a partial fragment and the seed never writes a separate key.
+    expect(config.llm.default).toEqual({
+      provider: "anthropic",
+      model: "claude-opus-4-7",
+    });
     expect(config.llm.activeProfile).toBe("balanced");
     expect(config.llm.advisorProfile).toBe("quality-optimized");
 
@@ -622,9 +626,8 @@ describe("loadConfig startup behavior", () => {
       model: "claude-opus-4-7",
     });
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "anthropic" });
     // The hatch materializes no profile entries: default content is
-    // code-owned and resolves through `llm.defaultProvider`'s matrix column.
+    // code-owned and resolves through `llm.default`'s matrix column.
     for (const name of LEGACY_HATCH_PROFILE_NAMES) {
       expect(raw.llm.profiles[name]).toBeUndefined();
     }
@@ -633,10 +636,7 @@ describe("loadConfig startup behavior", () => {
 
     // Resolution contract the hatch relies on: the defaults resolve active
     // through the hatch provider with the personal connection.
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     expect(effective.balanced?.provider).toBe("anthropic");
     expect(effective.balanced?.provider_connection).toBe("anthropic-personal");
     expect(effective.balanced?.model).toBe("claude-sonnet-4-6");
@@ -710,9 +710,14 @@ describe("loadConfig startup behavior", () => {
 
     const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
     // Off-platform re-hatch: the default profiles become active, anchored on
-    // the new hatch provider.
+    // the new hatch provider. The overlay's provider merges over the
+    // existing blob and the old model rides (fragment-merge semantics — the
+    // defaults themselves re-anchor through the provider's matrix column).
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "anthropic" });
+    expect(raw.llm.default).toEqual({
+      provider: "anthropic",
+      model: "gpt-5.4-mini",
+    });
     // The pre-existing custom profile is user-owned and never rewritten.
     expect(raw.llm.profiles["custom-balanced"]).toEqual({
       source: "user",
@@ -722,10 +727,7 @@ describe("loadConfig startup behavior", () => {
     // No stubs under the default keys; content resolves through the new
     // default provider's matrix column.
     expect(raw.llm.profiles.balanced).toBeUndefined();
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     expect(effective.balanced?.provider).toBe("anthropic");
     expect(effective.balanced?.provider_connection).toBe("anthropic-personal");
   });
@@ -871,17 +873,14 @@ describe("loadConfig startup behavior", () => {
     const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
 
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "openai" });
+    expect(raw.llm.default).toEqual({ provider: "openai" });
     for (const name of LEGACY_HATCH_PROFILE_NAMES) {
       expect(raw.llm.profiles[name]).toBeUndefined();
     }
 
     // The defaults resolve active through the openai column of the matrix,
     // stamped with the personal connection.
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     expect(effective.balanced?.provider).toBe("openai");
     expect(effective.balanced?.model).toBe("gpt-5.6-luna");
     expect(effective.balanced?.provider_connection).toBe("openai-personal");
@@ -910,18 +909,16 @@ describe("loadConfig startup behavior", () => {
     const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
 
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "together" });
-    // The parsed schema keeps the value — `.catch(undefined)` must not drop it.
-    expect(config.llm.defaultProvider).toEqual({ provider: "together" });
+    expect(raw.llm.default).toEqual({ provider: "together" });
+    // The parsed schema keeps the blob — the partial-fragment field must not
+    // drop it.
+    expect(config.llm.default).toEqual({ provider: "together" });
     for (const name of LEGACY_HATCH_PROFILE_NAMES) {
       expect(raw.llm.profiles[name]).toBeUndefined();
     }
     expect(getConnection(db, "together-personal")).not.toBeNull();
 
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     for (const name of [
       "balanced",
       "quality-optimized",
@@ -958,17 +955,14 @@ describe("loadConfig startup behavior", () => {
     const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
 
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "anthropic" });
-    expect(config.llm.defaultProvider).toEqual({ provider: "anthropic" });
+    expect(raw.llm.default).toEqual({ provider: "anthropic" });
+    expect(config.llm.default).toEqual({ provider: "anthropic" });
     for (const name of LEGACY_HATCH_PROFILE_NAMES) {
       expect(raw.llm.profiles[name]).toBeUndefined();
     }
     expect(getConnection(db, "typesafe-personal")).not.toBeNull();
 
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     for (const name of [
       "balanced",
       "quality-optimized",
@@ -1284,7 +1278,7 @@ describe("loadConfig startup behavior", () => {
         {
           llm: {
             default: {
-              provider: "openai",
+              provider: "cadet",
               model: "gpt-5.4",
             },
             profiles: {
@@ -1396,16 +1390,16 @@ describe("loadConfig startup behavior", () => {
       model: "claude-opus-4-7",
     });
     // Off-platform hatch: nothing is materialized; the defaults resolve
-    // through the hatch provider.
+    // through the hatch provider. The overlay's blob lands verbatim.
     expect(raw.llm.activeProfile).toBe("balanced");
-    expect(raw.llm.defaultProvider).toEqual({ provider: "anthropic" });
+    expect(raw.llm.default).toEqual({
+      provider: "anthropic",
+      model: "claude-opus-4-7",
+    });
     for (const name of LEGACY_HATCH_PROFILE_NAMES) {
       expect(raw.llm.profiles[name]).toBeUndefined();
     }
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     expect(effective.balanced?.provider).toBe("anthropic");
     expect(effective.balanced?.provider_connection).toBe("anthropic-personal");
   });
@@ -1419,7 +1413,9 @@ describe("loadConfig startup behavior", () => {
     // chat-model selection to `balanced` on the next boot.
     writeConfig({
       llm: {
-        defaultProvider: { provider: "cadet" },
+        default: {
+          provider: "cadet",
+        },
         profiles: {},
         activeProfile: "balanced-backup",
       },
@@ -1443,7 +1439,9 @@ describe("loadConfig startup behavior", () => {
     // selection instead of preserving a dead pointer.
     writeConfig({
       llm: {
-        defaultProvider: { provider: "anthropic" },
+        default: {
+          provider: "anthropic",
+        },
         profiles: {},
         activeProfile: "balanced-backup",
       },
@@ -1461,7 +1459,9 @@ describe("loadConfig startup behavior", () => {
   test("a call site pinned to a managed backup profile survives a reload", () => {
     writeConfig({
       llm: {
-        defaultProvider: { provider: "cadet" },
+        default: {
+          provider: "cadet",
+        },
         profiles: {},
         activeProfile: "balanced",
         callSites: { recall: { profile: "cost-optimized-backup" } },
@@ -1499,7 +1499,7 @@ describe("loadConfig startup behavior", () => {
 // ---------------------------------------------------------------------------
 // Tests: BYOK-mode seed behavior. A BYOK hatch writes no profile entries at
 // all: the default names resolve through the hatch provider's column of the
-// intent × provider matrix (via `llm.defaultProvider`), active and
+// intent × provider matrix (via `llm.default`), active and
 // connection-stamped. Boots never touch managed entries, so pre-existing
 // stubs and user toggles on them persist until the conversion pass removes
 // them.
@@ -1555,10 +1555,7 @@ describe("seedInferenceProfiles BYOK-mode default profiles", () => {
     // No workspace entries at all: no disabled stubs, no label suffixes, no
     // custom-* copies. The catalog serves the bare labels, active.
     expect(raw.llm.profiles).toEqual({});
-    const effective = getEffectiveProfilesForProvider(
-      raw.llm.profiles,
-      raw.llm.defaultProvider,
-    );
+    const effective = getEffectiveProfilesForProvider(LLMSchema.parse(raw.llm));
     expect(effective.balanced?.label).toBe("Balanced");
     expect(effective["quality-optimized"]?.label).toBe("Quality");
     expect(effective["cost-optimized"]?.label).toBe("Budget");

@@ -524,10 +524,7 @@ function assertSaneMaxTokens(
 
 async function handleListProfiles() {
   const config = getConfigReadOnly();
-  const effective = getUserSelectableProfilesForProvider(
-    config.llm.profiles,
-    config.llm.defaultProvider ?? null,
-  );
+  const effective = getUserSelectableProfilesForProvider(config.llm);
   // Presentation order, the same one the pickers use, rather than the
   // on-disk insertion order of `llm.profiles`.
   const profiles = await Promise.all(
@@ -561,7 +558,7 @@ async function handleGetProfile({ pathParams = {} }: RouteHandlerArgs) {
   const entry = resolveDefaultProfileForProvider(
     config.llm.profiles,
     name,
-    config.llm.defaultProvider ?? null,
+    config.llm.default,
   );
   if (!entry) {
     throw new NotFoundError(`Profile "${name}" not found.`);
@@ -669,7 +666,7 @@ async function handleCreateProfile({ body = {} }: RouteHandlerArgs) {
     entry: (resolveDefaultProfileForProvider(
       getConfig().llm.profiles,
       name,
-      getConfig().llm.defaultProvider ?? null,
+      getConfig().llm.default,
     ) ?? entry) as Record<string, unknown>,
     warnings,
     verify: verifyProfileCommand(name),
@@ -812,7 +809,7 @@ async function handleUpdateProfile({
     entry: (resolveDefaultProfileForProvider(
       getConfig().llm.profiles,
       name,
-      getConfig().llm.defaultProvider ?? null,
+      getConfig().llm.default,
     ) ?? merged) as Record<string, unknown>,
     warnings,
     verify: verifyProfileCommand(name),
@@ -882,10 +879,7 @@ async function handleSetActiveProfile({ body = {} }: RouteHandlerArgs) {
   // is rejected here instead of silently stripped on the next config load —
   // which would reset the user's chat-model selection.
   const config = getConfigReadOnly();
-  const effective = getUserSelectableProfilesForProvider(
-    config.llm.profiles,
-    config.llm.defaultProvider ?? null,
-  );
+  const effective = getUserSelectableProfilesForProvider(config.llm);
   const entry = effective[name] as Record<string, unknown> | undefined;
   if (!entry) {
     const valid = Object.keys(effective).sort().join(", ");

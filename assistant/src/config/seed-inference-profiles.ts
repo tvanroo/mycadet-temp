@@ -14,11 +14,11 @@ import {
   MANAGED_PROFILE_NAMES,
   MANAGED_PROFILE_TEMPLATES,
 } from "./default-profile-catalog.js";
-import { loadRawConfig, saveRawConfig } from "./loader.js";
+import { loadConfig, loadRawConfig, saveRawConfig } from "./loader.js";
 import { isDispatchableProfile } from "./profile-dispatchability.js";
 import {
-  type DefaultProviderConfig,
   isDefaultProviderChoice,
+  type LLMConfig,
   type ProfileEntry,
 } from "./schemas/llm.js";
 
@@ -52,9 +52,10 @@ export type SeedInferenceProfilesOptions = {
  *    `cadet` column routes through the canonical platform-backed row, never
  *    a user key, so no `cadet-personal` connection exists or is needed.
  *
- * 2. **`llm.defaultProvider`**: written once at hatch time, mirroring the
- *    platform/managed/BYOK decision, and never overwritten afterward. The
- *    default profiles resolve through this provider's matrix column.
+ * 2. **`llm.default`**: the base blob's `provider` field is written once at
+ *    hatch time, mirroring the platform/managed/BYOK decision, and never
+ *    overwritten afterward. The default profiles resolve through this
+ *    provider's matrix column.
  *
  * 3. **Active/advisor profile resolution**: hatches activate `balanced`;
  *    boots repair dangling or disabled selections.
@@ -62,17 +63,9 @@ export type SeedInferenceProfilesOptions = {
 export function seedInferenceProfiles(
   options: SeedInferenceProfilesOptions = {},
 ): void {
-  const config = loadRawConfig();
-
-  if (config.llm == null || typeof config.llm !== "object") {
-    config.llm = {};
-  }
-  const llm = config.llm as Record<string, unknown>;
-
-  if (llm.profiles == null || typeof llm.profiles !== "object") {
-    llm.profiles = {};
-  }
-  const profiles = llm.profiles as Record<string, Record<string, unknown>>;
+  const config = loadConfig();
+  const llm = config.llm;
+  const profiles = llm.profiles;
 
   const isPlatform =
     process.env.IS_PLATFORM === "true" || process.env.IS_PLATFORM === "1";
@@ -92,11 +85,8 @@ export function seedInferenceProfiles(
   //    default profiles to dispatch.
   let usableHatchProvider: string | undefined;
   if (options.isHatch && !isPlatform) {
-    // The hatch overlay writes `llm.defaultProvider` directly (older CLIs
-    // wrote the legacy `llm.default` blob — read it as a fallback).
-    const hatchProvider =
-      readString(readObject(llm.defaultProvider)?.provider) ??
-      readString(readObject(llm.default)?.provider);
+    // The hatch overlay writes `llm.default.provider` directly.
+    const hatchProvider = llm.default?.provider;
     if (
       hatchProvider &&
       hatchProvider !== CADET_MANAGED_PROVIDER &&
@@ -113,7 +103,7 @@ export function seedInferenceProfiles(
       if (!isDefaultProviderChoice(hatchProvider)) {
         log.warn(
           { provider: hatchProvider },
-          "Hatch provider key stored and personal connection created, but the provider cannot back the default profiles; llm.defaultProvider will fall back to anthropic",
+          "Hatch provider key stored and personal connection created, but the provider cannot back the default profiles; llm.default will fall back to anthropic",
         );
       }
       const userConnectionName = `${hatchProvider}-personal`;
@@ -139,8 +129,14 @@ export function seedInferenceProfiles(
   // 2. Default provider: hatch only, never overwritten once set. Always
   //    populated — even dangling, so later resolution can prompt the user
   //    for a key explainably rather than hitting an unset branch.
-  if (options.isHatch && readObject(llm.defaultProvider) === null) {
-    llm.defaultProvider = {
+  const blob = llm.default;
+  const blobProvider = blob?.provider;
+  if (
+    options.isHatch &&
+    (blobProvider == null || !isDefaultProviderChoice(blobProvider))
+  ) {
+    llm.default = {
+      ...blob,
       provider: resolveHatchDefaultProvider(
         isPlatform,
         hatchSelectedManagedConnection,
@@ -154,22 +150,20 @@ export function seedInferenceProfiles(
   // Profile lookups below go through the effective view: a default profile
   // resolves from the code catalog whether or not the workspace carries a
   // stub for it, and a stub contributes only its status/label overlays.
-  // Resolved against `llm.defaultProvider` so the managed backups count as
+  // Resolved against `llm.default` so the managed backups count as
   // available only on the managed column, matching what the schema accepts
-  // as a reference: an `activeProfile` naming a backup on a BYOK install is
-  // then repaired here rather than preserved as a dangling selection.
-  const effectiveProfiles = getEffectiveProfilesForProvider(
-    profiles as Record<string, ProfileEntry>,
-    seedResolutionDefaultProvider(llm),
-  ) as Record<string, Record<string, unknown>>;
+  // as a reference: an `activeProfile` naming a backup on a BYOK install
+  // fails the typed load's leaf recovery, reads here as no selection, and
+  // is repaired to `balanced` below.
+  const effectiveProfiles = getEffectiveProfilesForProvider(llm);
 
   // Active profile resolution.
-  const requestedActiveProfile = readString(llm.activeProfile);
+  const requestedActiveProfile = llm.activeProfile;
   const requestedActiveEntry =
     requestedActiveProfile !== undefined
-      ? readObject(effectiveProfiles[requestedActiveProfile])
-      : null;
-  const requestedActiveExists = requestedActiveEntry !== null;
+      ? effectiveProfiles[requestedActiveProfile]
+      : undefined;
+  const requestedActiveExists = requestedActiveEntry !== undefined;
   const shouldPreserveActiveProfile =
     options.preserveActiveProfile === true && requestedActiveExists;
 
@@ -180,11 +174,11 @@ export function seedInferenceProfiles(
   }
 
   // Advisor profile: defaults to the strongest active managed default.
-  const requestedAdvisorProfile = readString(llm.advisorProfile);
+  const requestedAdvisorProfile = llm.advisorProfile;
   const requestedAdvisorEntry =
     requestedAdvisorProfile !== undefined
-      ? readObject(effectiveProfiles[requestedAdvisorProfile])
-      : null;
+      ? effectiveProfiles[requestedAdvisorProfile]
+      : undefined;
   const requestedAdvisorIsDisabledManaged =
     requestedAdvisorEntry?.source === "managed" &&
     requestedAdvisorEntry.status === "disabled";
@@ -210,9 +204,7 @@ export function seedInferenceProfiles(
   // managed profiles stay grouped in catalog order even on a workspace whose
   // order already lists custom profiles. Entries already in the order keep
   // their relative positions, so a user arrangement survives.
-  const profileOrder = Array.isArray(llm.profileOrder)
-    ? (llm.profileOrder as string[])
-    : [];
+  const profileOrder = [...llm.profileOrder];
   const managedNames = Object.keys(MANAGED_PROFILE_TEMPLATES);
   for (const [index, name] of managedNames.entries()) {
     if (profileOrder.includes(name)) {
@@ -236,36 +228,15 @@ export function seedInferenceProfiles(
     if (MANAGED_PROFILE_NAMES.has(name)) {
       continue;
     }
-    if (
-      profile != null &&
-      typeof profile === "object" &&
-      !("source" in profile)
-    ) {
-      profile.source = "user";
-    }
+    profile.source ??= "user";
   }
 
-  saveRawConfig(config);
-}
-
-/**
- * The `llm.defaultProvider` to resolve the effective catalog against, read
- * from RAW config. Only a value the matrix can implement is used: a
- * hand-edited or legacy provider outside `DEFAULT_PROVIDER_CHOICES` has no
- * column and no verified intent resolution, so materializing against it
- * could throw and fail the whole boot seed. Such a value falls back to
- * `null`, which resolves the managed column.
- */
-function seedResolutionDefaultProvider(
-  llm: Record<string, unknown>,
-): DefaultProviderConfig | null {
-  const raw = readObject(llm.defaultProvider);
-  const provider = readString(raw?.provider);
-  if (provider === undefined || !isDefaultProviderChoice(provider)) {
-    return null;
-  }
-  const connectionName = readString(raw?.connectionName);
-  return { provider, ...(connectionName ? { connectionName } : {}) };
+  // Persist: the seed only ever rewrites the `llm` section, so the typed
+  // view's `llm` lands on the raw base verbatim and every other section the
+  // user has on disk survives untouched.
+  const raw = loadRawConfig();
+  raw.llm = llm;
+  saveRawConfig(raw);
 }
 
 export function readObject(value: unknown): Record<string, unknown> | null {
@@ -295,8 +266,8 @@ function resolveHatchDefaultProvider(
 }
 
 function pruneNonDispatchableProfiles(
-  llm: Record<string, unknown>,
-  profiles: Record<string, Record<string, unknown>>,
+  llm: LLMConfig,
+  profiles: Record<string, ProfileEntry>,
 ): void {
   const removed = new Set<string>();
   for (const [name, profile] of Object.entries(profiles)) {
@@ -315,8 +286,8 @@ function pruneNonDispatchableProfiles(
 }
 
 function pruneRemovedProfileReferences(
-  llm: Record<string, unknown>,
-  profiles: Record<string, Record<string, unknown>>,
+  llm: LLMConfig,
+  profiles: Record<string, ProfileEntry>,
   removed: Set<string>,
 ): void {
   if (removed.size === 0) {
@@ -330,15 +301,11 @@ function pruneRemovedProfileReferences(
       if (removed.has(name)) {
         continue;
       }
-      if (!Array.isArray(profile.mix)) {
+      if (profile.mix == null) {
         continue;
       }
-      const arms = profile.mix as unknown[];
-      const kept = arms.filter((arm) => {
-        const armProfile = readObject(arm)?.profile;
-        return typeof armProfile !== "string" || !removed.has(armProfile);
-      });
-      if (kept.length === arms.length) {
+      const kept = profile.mix.filter((arm) => !removed.has(arm.profile));
+      if (kept.length === profile.mix.length) {
         continue;
       }
       if (kept.length >= MIX_MIN_ARMS) {
@@ -351,44 +318,25 @@ function pruneRemovedProfileReferences(
     }
   }
 
-  if (Array.isArray(llm.profileOrder)) {
-    llm.profileOrder = (llm.profileOrder as unknown[]).filter(
-      (name) => typeof name !== "string" || !removed.has(name),
-    );
-  }
+  llm.profileOrder = llm.profileOrder.filter((name) => !removed.has(name));
 
-  if (
-    typeof llm.advisorProfile === "string" &&
-    removed.has(llm.advisorProfile)
-  ) {
+  if (llm.advisorProfile !== undefined && removed.has(llm.advisorProfile)) {
     delete llm.advisorProfile;
   }
 
-  const callSites = readObject(llm.callSites);
-  if (callSites) {
-    for (const entry of Object.values(callSites)) {
-      const site = readObject(entry);
-      if (
-        site &&
-        typeof site.profile === "string" &&
-        removed.has(site.profile)
-      ) {
-        delete site.profile;
-      }
+  for (const entry of Object.values(llm.callSites)) {
+    if (entry.profile !== undefined && removed.has(entry.profile)) {
+      delete entry.profile;
     }
   }
 }
 
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 function firstActiveManagedProfile(
-  profiles: Record<string, Record<string, unknown>>,
+  profiles: Record<string, ProfileEntry>,
   names: string[],
 ): string | undefined {
   for (const name of names) {
-    const profile = readObject(profiles[name]);
+    const profile = profiles[name];
     if (profile?.source === "managed" && profile.status !== "disabled") {
       return name;
     }
@@ -397,34 +345,22 @@ function firstActiveManagedProfile(
 }
 
 function didHatchSelectManagedConnection(
-  llm: Record<string, unknown>,
-  profiles: Record<string, Record<string, unknown>>,
+  llm: LLMConfig,
+  profiles: Record<string, ProfileEntry>,
   options: SeedInferenceProfilesOptions,
 ): boolean {
   if (!options.isHatch || options.preserveActiveProfile !== true) {
     return false;
   }
 
-  const activeProfile = readString(llm.activeProfile);
+  const activeProfile = llm.activeProfile;
   if (!activeProfile) {
     return false;
   }
 
-  const activeProfileEntry = readObject(profiles[activeProfile]);
-  if (
-    activeProfileEntry &&
-    Object.prototype.hasOwnProperty.call(
-      activeProfileEntry,
-      "provider_connection",
-    )
-  ) {
-    const explicitConnection = readString(
-      activeProfileEntry.provider_connection,
-    );
-    return (
-      explicitConnection !== undefined &&
-      MANAGED_CONNECTION_NAMES.has(explicitConnection)
-    );
+  const explicitConnection = profiles[activeProfile]?.provider_connection;
+  if (explicitConnection !== undefined) {
+    return MANAGED_CONNECTION_NAMES.has(explicitConnection);
   }
 
   // A default-profile name with no explicit connection selects the managed

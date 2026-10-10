@@ -57,7 +57,7 @@ function mixArms(
   const entry = resolveDefaultProfileForProvider(
     llm.profiles,
     profileKey,
-    llm.defaultProvider ?? null,
+    llm.default,
   );
   return entry?.mix?.map((arm) => arm.profile);
 }

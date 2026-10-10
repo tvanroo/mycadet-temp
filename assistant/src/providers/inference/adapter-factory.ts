@@ -383,7 +383,7 @@ export function createAdapterFromConnection(
         const backup = resolveDefaultProfileForProvider(
           llm.profiles,
           overrideProfile,
-          llm.defaultProvider ?? null,
+          llm.default,
         );
         if (backup?.model == null) {
           log.warn(

@@ -148,10 +148,7 @@ async function resolveModelCommand(
   parse: ModelCommandParse,
 ): Promise<SlashResolution> {
   const config = getConfig();
-  const profiles = getConversationProfilesForProvider(
-    config.llm.profiles,
-    config.llm.defaultProvider ?? null,
-  );
+  const profiles = getConversationProfilesForProvider(config.llm);
   const profileNames = orderProfileKeys(profiles, config.llm.profileOrder);
   const activeProfile = config.llm.activeProfile;
 

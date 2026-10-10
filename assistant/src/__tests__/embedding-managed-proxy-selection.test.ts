@@ -7,6 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { setAllFlagsOnForTesting } from "../__tests__/feature-flag-test-helpers.js";
 import { credentialKey } from "../security/credential-key.js";
 import { useMemorySecureKeyMap } from "./helpers/secure-keys.js";
 
@@ -18,19 +19,16 @@ const secureKeys = useMemorySecureKeyMap();
 // ---------------------------------------------------------------------------
 
 // Mutable state for managed proxy context
-let mockPlatformBaseUrl = "";
+let mockCloudBaseUrl = "";
 // Managed + provider keys live in the real backend's store now.
 const ASSISTANT_API_KEY = credentialKey("cadet", "assistant_api_key");
 
 mock.module("../config/env.js", () => ({
-  getPlatformBaseUrl: () => mockPlatformBaseUrl,
+  getCloudBaseUrl: () => mockCloudBaseUrl,
   getOllamaBaseUrlEnv: () => "",
 }));
 
 // Feature flag mock — always returns true (flag is GA'ed)
-mock.module("../config/assistant-feature-flags.js", () => ({
-  isAssistantFeatureFlagEnabled: () => true,
-}));
 
 import type { AssistantConfig } from "../config/types.js";
 import {
@@ -47,12 +45,12 @@ const PLATFORM_BASE = "https://platform.example.com";
 const MANAGED_API_KEY = "ast-managed-key-123";
 
 function enableManagedProxy() {
-  mockPlatformBaseUrl = PLATFORM_BASE;
+  mockCloudBaseUrl = PLATFORM_BASE;
   secureKeys.set(ASSISTANT_API_KEY, MANAGED_API_KEY);
 }
 
 function disableManagedProxy() {
-  mockPlatformBaseUrl = "";
+  mockCloudBaseUrl = "";
   secureKeys.delete(ASSISTANT_API_KEY);
 }
 
@@ -88,6 +86,9 @@ function makeConfig(
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // Real flag resolution replaces the former blanket module mock.
+  setAllFlagsOnForTesting();
+
   disableManagedProxy();
   secureKeys.clear(); // wipe provider keys; disableManagedProxy already cleared the assistant key
   clearEmbeddingBackendCache();

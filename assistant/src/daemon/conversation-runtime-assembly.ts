@@ -256,7 +256,7 @@ export function resolveTurnModelProfileLabel(
   const profileEntry = resolveDefaultProfileForProvider(
     llm.profiles,
     modelProfileNoticeKey,
-    llm.defaultProvider ?? null,
+    llm.default,
   );
   const resolved = resolveCallSiteConfig(callSite, llm, {
     overrideProfile: modelProfileNoticeKey,

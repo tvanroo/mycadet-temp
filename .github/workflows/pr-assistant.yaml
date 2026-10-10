@@ -33,7 +33,7 @@ jobs:
   checks:
     name: Lint, Type Check & Test
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       NODE_OPTIONS: --max-old-space-size=8192
     defaults:
@@ -67,6 +67,9 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
 
       - name: Lint unused code
         run: bun run lint:unused

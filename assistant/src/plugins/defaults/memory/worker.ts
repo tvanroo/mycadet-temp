@@ -14,7 +14,7 @@ import { writeFileSync } from "node:fs";
 
 import { getConfig } from "../../../config/loader.js";
 import { isMemoryEnabled } from "../../../config/memory-v3-gate.js";
-import { rehydratePlatformCredentials } from "../../../config/platform-rehydration.js";
+import { rehydrateCloudCredentials } from "../../../config/platform-rehydration.js";
 import { startConversationEvictor } from "../../../daemon/conversation-evictor.js";
 import {
   startWorkspaceSkillMdMtimePoll,
@@ -57,13 +57,13 @@ async function main(): Promise<void> {
 
   // Rehydrate the platform base URL and IDs from the credential store before
   // any job runs. The daemon does this in initializeProvidersAndTools(); this
-  // standalone process must do it itself so getPlatformBaseUrl() resolves to
+  // standalone process must do it itself so getCloudBaseUrl() resolves to
   // the persisted platform environment instead of the CADET_ENVIRONMENT
   // default. Retrospective and consolidation passes wake real agent
   // conversations whose inference and background-wake requests go through the
   // platform proxy — without rehydration those requests hit the wrong platform
   // and are rejected.
-  await rehydratePlatformCredentials();
+  await rehydrateCloudCredentials();
 
   // Jobs in this process wake real agent conversations, so it registers the
   // default plugin hook surface (hooks and injectors, no init hooks) the same

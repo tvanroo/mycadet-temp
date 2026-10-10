@@ -19,17 +19,17 @@ mock.module("../../security/secure-keys.js", () => ({
 
 const {
   getPlatformAssistantId,
-  getPlatformBaseUrl,
+  getCloudBaseUrl,
   getPlatformOrganizationId,
   getPlatformUserId,
-  setPlatformAssistantId,
-  setPlatformBaseUrl,
-  setPlatformOrganizationId,
-  setPlatformUserId,
+  setCloudAssistantId,
+  setCloudBaseUrl,
+  setCloudOrganizationId,
+  setCloudUserId,
 } = await import("../env.js");
 const { _resetPlatformIdentityEnsureForTests } =
   await import("../platform-identity.js");
-const { rehydratePlatformCredentials } =
+const { rehydrateCloudCredentials } =
   await import("../platform-rehydration.js");
 
 const PROD_URL = "https://cloud.mycadet.ai";
@@ -37,7 +37,7 @@ const ASSISTANT_ID = "11111111-2222-4333-8444-555555555555";
 const ORG_ID = "22222222-3333-4444-8555-666666666666";
 const USER_ID = "33333333-4444-4555-8666-777777777777";
 
-describe("rehydratePlatformCredentials", () => {
+describe("rehydrateCloudCredentials", () => {
   const originalPlatformUrlEnv = process.env.CADET_PLATFORM_URL;
   const originalOrgEnv = process.env.PLATFORM_ORGANIZATION_ID;
   const originalUserEnv = process.env.PLATFORM_USER_ID;
@@ -70,10 +70,10 @@ describe("rehydratePlatformCredentials", () => {
     delete process.env.PLATFORM_USER_ID;
     delete process.env.ASSISTANT_API_KEY;
     // Reset in-memory overrides between tests.
-    setPlatformBaseUrl(undefined);
-    setPlatformAssistantId(undefined);
-    setPlatformOrganizationId(undefined);
-    setPlatformUserId(undefined);
+    setCloudBaseUrl(undefined);
+    setCloudAssistantId(undefined);
+    setCloudOrganizationId(undefined);
+    setCloudUserId(undefined);
     _resetPlatformIdentityEnsureForTests();
   });
 
@@ -99,23 +99,22 @@ describe("rehydratePlatformCredentials", () => {
     } else {
       process.env.ASSISTANT_API_KEY = originalAssistantApiKeyEnv;
     }
-    setPlatformBaseUrl(undefined);
-    setPlatformAssistantId(undefined);
-    setPlatformOrganizationId(undefined);
-    setPlatformUserId(undefined);
+    setCloudBaseUrl(undefined);
+    setCloudAssistantId(undefined);
+    setCloudOrganizationId(undefined);
+    setCloudUserId(undefined);
   });
 
   test("rehydrates the platform base URL from the credential store", async () => {
     mockSecureKeys[credentialKey("cadet", "platform_base_url")] = PROD_URL;
     mockSecureKeys[credentialKey("cadet", "platform_assistant_id")] =
       ASSISTANT_ID;
-    mockSecureKeys[credentialKey("cadet", "platform_organization_id")] =
-      ORG_ID;
+    mockSecureKeys[credentialKey("cadet", "platform_organization_id")] = ORG_ID;
     mockSecureKeys[credentialKey("cadet", "platform_user_id")] = USER_ID;
 
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
-    expect(getPlatformBaseUrl()).toBe(PROD_URL);
+    expect(getCloudBaseUrl()).toBe(PROD_URL);
     expect(getPlatformAssistantId()).toBe("");
     expect(getPlatformOrganizationId()).toBe("");
     expect(getPlatformUserId()).toBe("");
@@ -125,13 +124,13 @@ describe("rehydratePlatformCredentials", () => {
     mockSecureKeys[credentialKey("cadet", "platform_base_url")] =
       `  ${PROD_URL}  `;
 
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
-    expect(getPlatformBaseUrl()).toBe(PROD_URL);
+    expect(getCloudBaseUrl()).toBe(PROD_URL);
   });
 
   test("leaves overrides untouched when nothing is stored", async () => {
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
     expect(getPlatformAssistantId()).toBe("");
     expect(getPlatformOrganizationId()).toBe("");
@@ -141,7 +140,7 @@ describe("rehydratePlatformCredentials", () => {
   test("a credential-store read failure does not throw", async () => {
     throwForKey = credentialKey("cadet", "platform_base_url");
 
-    await expect(rehydratePlatformCredentials()).resolves.toBeUndefined();
+    await expect(rehydrateCloudCredentials()).resolves.toBeUndefined();
     expect(getPlatformAssistantId()).toBe("");
   });
 
@@ -159,7 +158,7 @@ describe("rehydratePlatformCredentials", () => {
         { status: 200 },
       );
 
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]?.url).toBe(
@@ -188,7 +187,7 @@ describe("rehydratePlatformCredentials", () => {
         { status: 200 },
       );
 
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
     expect(getPlatformAssistantId()).toBe(ASSISTANT_ID);
   });
@@ -199,14 +198,13 @@ describe("rehydratePlatformCredentials", () => {
       "assistant-key";
     mockSecureKeys[credentialKey("cadet", "platform_assistant_id")] =
       ASSISTANT_ID;
-    mockSecureKeys[credentialKey("cadet", "platform_organization_id")] =
-      ORG_ID;
+    mockSecureKeys[credentialKey("cadet", "platform_organization_id")] = ORG_ID;
     mockSecureKeys[credentialKey("cadet", "platform_user_id")] = USER_ID;
     fetchImpl = async () => {
       throw new Error("network down");
     };
 
-    await rehydratePlatformCredentials();
+    await rehydrateCloudCredentials();
 
     expect(getPlatformAssistantId()).toBe("");
     expect(getPlatformOrganizationId()).toBe("");

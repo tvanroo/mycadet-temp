@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 
-import { getIsPlatform } from "../../config/env-registry.js";
+import { getIsCloud } from "../../config/env-registry.js";
 import { getConfig } from "../../config/loader.js";
 import {
   registerCallbackRoute,
@@ -148,7 +148,7 @@ async function handleWebhooksRegister(
     (pathOverride as string | undefined) ?? deriveWebhookPath(type as string);
   const sourceIdentifier = source as string | undefined;
 
-  if (getIsPlatform()) {
+  if (getIsCloud()) {
     if (isTunnelWebhooksEnabled()) {
       const callbackUrl = await resolveClaimedPodWebhookUrl(
         () => `${getPublicBaseUrl(getConfig())}/${webhookPath}`,
@@ -201,13 +201,13 @@ async function handleWebhooksList(
 ): Promise<WebhooksListResponse> {
   const context = await resolvePlatformCallbackRegistrationContext();
 
-  if (!context.platformBaseUrl || !context.authHeader) {
+  if (!context.cloudBaseUrl || !context.authHeader) {
     throw new UnprocessableEntityError(
       "Self-hosted webhook listing is not available. Use 'assistant webhooks register <type>' to resolve URLs on demand.",
     );
   }
 
-  const url = `${context.platformBaseUrl}/v1/internal/gateway/callback-routes/`;
+  const url = `${context.cloudBaseUrl}/v1/internal/gateway/callback-routes/`;
   let response: Response;
   try {
     response = await fetch(url, {

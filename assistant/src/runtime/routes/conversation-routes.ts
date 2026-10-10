@@ -1772,10 +1772,7 @@ export async function handleSendMessage(
     const { llm } = getConfig();
     // The conversation view: a sticky pin runs the main agent's turns, so a
     // profile whose model returns verdicts rather than text is not offered.
-    const profiles = getConversationProfilesForProvider(
-      llm.profiles,
-      llm.defaultProvider ?? null,
-    );
+    const profiles = getConversationProfilesForProvider(llm);
     if (
       !Object.prototype.hasOwnProperty.call(profiles, requestedInferenceProfile)
     ) {
@@ -3884,9 +3881,7 @@ export const ROUTES: RouteDefinition[] = [
       sourceChannel: z
         .string()
         .describe('Originating channel id (e.g. "cadet")'),
-      interface: z
-        .string()
-        .describe('Originating interface id (e.g. "cadet")'),
+      interface: z.string().describe('Originating interface id (e.g. "cadet")'),
       conversationType: z.string().optional(),
       slashCommand: z.string().optional(),
       clientTimezone: z.string().optional(),

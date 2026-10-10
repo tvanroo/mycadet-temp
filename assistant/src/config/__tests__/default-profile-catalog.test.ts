@@ -25,7 +25,7 @@ import {
   resolveDefaultProfileKey,
 } from "../llm-resolver.js";
 import {
-  type DefaultProviderConfig,
+  isDefaultProviderChoice,
   type LLMCallSite,
   LLMCallSiteEnum,
   LLMSchema,
@@ -70,12 +70,12 @@ describe("getEffectiveProfiles", () => {
       expectedProvider: "typesafe",
     });
     expect(
-      resolveDefaultProfileForProvider(undefined, "jev-managed", null),
+      resolveDefaultProfileForProvider(undefined, "jev-managed", undefined),
     ).toBeDefined();
     expect(
       resolveDefaultProfileForProvider(undefined, "jev-managed", {
         provider: "anthropic",
-        connectionName: "anthropic-personal",
+        provider_connection: "anthropic-personal",
       }),
     ).toBeUndefined();
   });
@@ -90,32 +90,34 @@ describe("getEffectiveProfiles", () => {
     // Not seeded unconditionally: the flag reconcile writes the stub.
     expect(Object.keys(MANAGED_PROFILE_TEMPLATES)).not.toContain("auto");
     expect(
-      resolveDefaultProfileForProvider(undefined, "auto", null),
+      resolveDefaultProfileForProvider(undefined, "auto", undefined),
     ).toBeUndefined();
     const stub: Record<string, ProfileEntry> = { auto: { source: "managed" } };
-    expect(resolveDefaultProfileForProvider(stub, "auto", null)?.model).toBe(
-      balanced.model,
-    );
+    expect(
+      resolveDefaultProfileForProvider(stub, "auto", undefined)?.model,
+    ).toBe(balanced.model);
     expect(
       resolveDefaultProfileForProvider(stub, "auto", {
         provider: "anthropic",
-        connectionName: "anthropic-personal",
+        provider_connection: "anthropic-personal",
       }),
     ).toBeUndefined();
     expect(
-      Object.keys(getConversationProfilesForProvider(stub, null)),
+      Object.keys(
+        getConversationProfilesForProvider(LLMSchema.parse({ profiles: stub })),
+      ),
     ).toContain("auto");
   });
 
   test("the conversation view drops the managed Jev profile but keeps it selectable for call sites", () => {
     expect(
-      Object.keys(getConversationProfilesForProvider(undefined, null)),
+      Object.keys(getConversationProfilesForProvider(undefined)),
     ).not.toContain("jev-managed");
     expect(
-      Object.keys(getUserSelectableProfilesForProvider(undefined, null)),
+      Object.keys(getUserSelectableProfilesForProvider(undefined)),
     ).toContain("jev-managed");
     expect(
-      Object.keys(getConversationProfilesForProvider(undefined, null)),
+      Object.keys(getConversationProfilesForProvider(undefined)),
     ).toContain("balanced");
   });
 
@@ -219,12 +221,16 @@ describe("getEffectiveProfiles", () => {
 
 describe("user-selectable profile view", () => {
   test("hides managed backups while retaining them in the fallback catalog", () => {
-    const effective = getEffectiveProfilesForProvider(undefined, {
-      provider: "cadet",
-    });
-    const selectable = getUserSelectableProfilesForProvider(undefined, {
-      provider: "cadet",
-    });
+    const effective = getEffectiveProfilesForProvider(
+      LLMSchema.parse({
+        default: { provider: "cadet" },
+      }),
+    );
+    const selectable = getUserSelectableProfilesForProvider(
+      LLMSchema.parse({
+        default: { provider: "cadet" },
+      }),
+    );
 
     for (const key of DEFAULT_PROFILE_KEYS) {
       expect(selectable[key]).toBeDefined();
@@ -437,26 +443,30 @@ describe("schema validation", () => {
     ).toBe(false);
   });
 
-  test("defaultProvider accepts any default-capable API-key provider and drops the rest", () => {
+  test("the llm.default blob keeps any provider on disk; the read clamps to matrix choices", () => {
     expect(
-      LLMSchema.parse({ defaultProvider: { provider: "together" } })
-        .defaultProvider,
+      LLMSchema.parse({ default: { provider: "together" } }).default,
     ).toEqual({ provider: "together" });
-    // User-endpoint and keyless providers have no code-resolvable
-    // default profile implementation; the catch drops them atomically.
+    // User-endpoint and keyless providers have no code-resolvable default
+    // profile implementation. The blob is a partial fragment (stripping the
+    // provider would drop the blob's other fields), so they stay on disk and
+    // the read clamps them to null — resolution treats that as the managed
+    // column.
     for (const provider of ["openai-compatible", "ollama"]) {
+      const blobProvider = LLMSchema.parse({ default: { provider } }).default
+        ?.provider;
       expect(
-        LLMSchema.parse({ defaultProvider: { provider } }).defaultProvider,
-      ).toBeUndefined();
+        blobProvider != null && isDefaultProviderChoice(blobProvider),
+      ).toBe(false);
     }
   });
 });
 
 describe("resolveDefaultProfileForProvider", () => {
-  const dp = (
-    provider: DefaultProviderConfig["provider"],
-    connectionName?: string,
-  ) => ({ provider, ...(connectionName ? { connectionName } : {}) });
+  const dp = (provider: string, provider_connection?: string) => ({
+    provider,
+    ...(provider_connection ? { provider_connection } : {}),
+  });
 
   test("every matrix column materializes every default profile key", () => {
     for (const provider of DEFAULT_PROFILE_PROVIDERS) {
@@ -487,7 +497,11 @@ describe("resolveDefaultProfileForProvider", () => {
       "cost-optimized": "gpt-5.6-luna",
       "latency-optimized": "gpt-5.6-luna",
     };
-    const effective = getEffectiveProfilesForProvider(undefined, dp("chatgpt"));
+    const effective = getEffectiveProfilesForProvider(
+      LLMSchema.parse({
+        default: dp("chatgpt"),
+      }),
+    );
     for (const [key, model] of Object.entries(byKey)) {
       const entry = effective[key];
       expect(entry?.provider).toBe("chatgpt");
@@ -642,9 +656,9 @@ describe("resolveDefaultProfileForProvider", () => {
 
   test("a null defaultProvider falls back to the cadet code bodies", () => {
     for (const key of DEFAULT_PROFILE_KEYS) {
-      expect(resolveDefaultProfileForProvider(undefined, key, null)).toEqual(
-        getEffectiveProfile(undefined, key) as ProfileEntry,
-      );
+      expect(
+        resolveDefaultProfileForProvider(undefined, key, undefined),
+      ).toEqual(getEffectiveProfile(undefined, key) as ProfileEntry);
     }
   });
 

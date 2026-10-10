@@ -22,10 +22,7 @@ import type { ModelProfileInfo } from "./types.js";
 export function getModelProfiles(): ModelProfileInfo[] {
   const { llm } = getConfig();
   const { activeProfile } = llm;
-  const profiles = getConversationProfilesForProvider(
-    llm.profiles,
-    llm.defaultProvider ?? null,
-  );
+  const profiles = getConversationProfilesForProvider(llm);
   const result: ModelProfileInfo[] = [];
   for (const key of orderProfileKeys(profiles, llm.profileOrder)) {
     const entry = profiles[key];

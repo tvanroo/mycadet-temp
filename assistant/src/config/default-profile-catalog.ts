@@ -29,7 +29,9 @@ import {
   backupProfilesResolveUnderDefaultProvider,
   DEFAULT_CONTEXT_WINDOW_MAX_INPUT_TOKENS,
   DEFAULT_PROVIDER_CHOICES,
-  type DefaultProviderConfig,
+  isDefaultProviderChoice,
+  type LLMConfig,
+  type LLMDefaultConfig,
   type ProfileEntry,
 } from "./schemas/llm.js";
 
@@ -44,7 +46,7 @@ import {
  * implementation of that intent (model, token budget, effort, thinking).
  * The `cadet` column is the platform-managed implementation and the
  * `chatgpt` column is the ChatGPT-subscription implementation; the other
- * columns are the BYOK implementations resolved through `llm.defaultProvider`
+ * columns are the BYOK implementations resolved through `llm.default`
  * on off-platform installs.
  *
  * Nothing materializes default bodies into workspace config: runtime readers
@@ -803,8 +805,9 @@ function resolveAgainstBody(
 /**
  * Like `getEffectiveProfile`, but a default profile key's code-owned body
  * comes from the default provider's implementation of the intent × provider
- * matrix instead of always the `cadet` column. A `null` defaultProvider and
- * every non-matrix name fall back to `getEffectiveProfile`'s behavior.
+ * matrix instead of always the `cadet` column. A blob with no usable
+ * `default.provider` and every non-matrix name fall back to
+ * `getEffectiveProfile`'s behavior.
  *
  * Non-obvious rules:
  *
@@ -824,12 +827,12 @@ function resolveAgainstBody(
 export function resolveDefaultProfileForProvider(
   workspaceProfiles: Record<string, ProfileEntry> | undefined,
   name: string,
-  defaultProvider: DefaultProviderConfig | null,
+  defaultBlob: LLMDefaultConfig | undefined,
 ): ProfileEntry | undefined {
   return resolveAgainstBody(
     workspaceProfiles?.[name],
     name,
-    defaultProfileBodyForProvider(name, defaultProvider),
+    defaultProfileBodyForProvider(name, defaultBlob),
   );
 }
 
@@ -859,35 +862,37 @@ function defaultProfileImplForProvider(
  */
 function defaultProfileBodyForProvider(
   name: string,
-  defaultProvider: DefaultProviderConfig | null,
+  defaultBlob: LLMDefaultConfig | undefined,
 ): ProfileEntry | undefined {
   if (!isDefaultProfileKey(name)) {
     // Backup profiles and the managed Jev profile exist on the managed
     // (`cadet`) column only: under a BYOK or chatgpt default provider the
     // primaries carry no `fallbackProfile` pointers, and neither may
     // materialize, since the install may hold no credential for their
-    // provider. A null defaultProvider predates `llm.defaultProvider` and
-    // resolves to the managed column, so it keeps them.
+    // provider. A blob with no usable selection resolves to the managed
+    // column, so it keeps them.
     if (
       isManagedOnlyProfileKey(name) &&
-      !backupProfilesResolveUnderDefaultProvider(defaultProvider)
+      !backupProfilesResolveUnderDefaultProvider(defaultBlob)
     ) {
       return undefined;
     }
     return CODE_DEFAULT_PROFILE_ENTRIES[name];
   }
-  if (defaultProvider == null) {
-    // An install that predates `llm.defaultProvider` resolves to the managed
-    // column, which is what the frozen bodies carry.
+  // The blob's `provider` is the loose provider set: only a value the intent
+  // × provider matrix can implement selects a column; anything else — no
+  // provider, a keyless ollama, a user-endpoint openai-compatible — resolves
+  // to the managed column, which is what the frozen bodies carry.
+  const provider = defaultBlob?.provider;
+  if (provider == null || !isDefaultProviderChoice(provider)) {
     return CODE_DEFAULT_PROFILE_ENTRIES[name];
   }
-  const { provider } = defaultProvider;
   const impl = defaultProfileImplForProvider(name, provider);
   return clampMaxTokensToModelCap({
     ...materializeProfile(
       impl,
       impl.provider,
-      resolveDefaultConnectionName(defaultProvider),
+      resolveDefaultConnectionName(defaultBlob) ?? undefined,
     ),
     source: "managed",
   });
@@ -921,7 +926,7 @@ function clampMaxTokensToModelCap(body: ProfileEntry): ProfileEntry {
  * workspace record is a write-path concern.
  *
  * Deliberately provider-agnostic: it lists the managed backups whatever
- * `llm.defaultProvider` says, because it resolves names against the passed
+ * `llm.default` says, because it resolves names against the passed
  * catalog alone and never reads config. Internal resolution and reference
  * validation use `getEffectiveProfilesForProvider`; user-facing selectors use
  * `getUserSelectableProfilesForProvider`, which additionally removes backups
@@ -948,24 +953,23 @@ export function getEffectiveProfiles(
 
 /**
  * Like `getEffectiveProfiles`, but resolves each default profile key through
- * the same `llm.defaultProvider`-aware path the runtime resolver uses
+ * the same `llm.default`-aware path the runtime resolver uses
  * (`resolveDefaultProfileForProvider`) rather than always the `cadet` column.
  * On BYOK installs this is what makes the reported provider/model/availability
  * for `balanced`/`quality-optimized`/`cost-optimized` match what actually runs.
- * A `null` defaultProvider reduces to `getEffectiveProfiles`.
+ * A blob with no usable `default.provider` reduces to `getEffectiveProfiles`.
  */
 export function getEffectiveProfilesForProvider(
-  workspaceProfiles: Record<string, ProfileEntry> | undefined,
-  defaultProvider: DefaultProviderConfig | null,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
   const effective: Record<string, ProfileEntry> = {
-    ...(workspaceProfiles ?? {}),
+    ...(llm?.profiles ?? {}),
   };
   for (const name of Object.keys(CODE_DEFAULT_PROFILE_ENTRIES)) {
     const entry = resolveDefaultProfileForProvider(
-      workspaceProfiles,
+      llm?.profiles,
       name,
-      defaultProvider,
+      llm?.default,
     );
     if (entry != null) {
       effective[name] = entry;
@@ -986,13 +990,9 @@ export function getEffectiveProfilesForProvider(
  * are internal routes rather than profiles a user can choose directly.
  */
 export function getUserSelectableProfilesForProvider(
-  workspaceProfiles: Record<string, ProfileEntry> | undefined,
-  defaultProvider: DefaultProviderConfig | null,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
-  const selectable = getEffectiveProfilesForProvider(
-    workspaceProfiles,
-    defaultProvider,
-  );
+  const selectable = getEffectiveProfilesForProvider(llm);
   for (const name of BACKUP_PROFILE_KEYS) {
     delete selectable[name];
   }
@@ -1008,13 +1008,9 @@ export function getUserSelectableProfilesForProvider(
  * the wider selectable view, since the verdict sites are what Jev is for.
  */
 export function getConversationProfilesForProvider(
-  workspaceProfiles: Record<string, ProfileEntry> | undefined,
-  defaultProvider: DefaultProviderConfig | null,
+  llm: LLMConfig | undefined,
 ): Record<string, ProfileEntry> {
-  const selectable = getUserSelectableProfilesForProvider(
-    workspaceProfiles,
-    defaultProvider,
-  );
+  const selectable = getUserSelectableProfilesForProvider(llm);
   for (const [name, entry] of Object.entries(selectable)) {
     if (!profileSupportsTextGeneration(entry, selectable)) {
       delete selectable[name];

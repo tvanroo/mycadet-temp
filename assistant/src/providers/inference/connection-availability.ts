@@ -11,7 +11,7 @@
  * because those writes are what a chat turn resolves through. Generic
  * `config set` writes and dispatch itself stay report-only.
  *
- * Consumed by the default-provider status route (`llm.defaultProvider`) and
+ * Consumed by the default-provider status route (`llm.default`) and
  * the inference-profile routes (per-profile availability) so the two never
  * drift.
  */
@@ -77,7 +77,7 @@ export async function cadetConnectionAvailability(): Promise<ConnectionAvailabil
   if (ctx.enabled) {
     return { status: "ok" };
   }
-  if (!ctx.platformBaseUrl) {
+  if (!ctx.cloudBaseUrl) {
     return {
       status: "cadet_unauthenticated",
       message: "Not signed in to Cadet — the platform URL is not configured.",

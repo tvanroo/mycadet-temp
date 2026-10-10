@@ -18,7 +18,7 @@ import {
   refreshOverridesFromGateway,
 } from "../config/assistant-feature-flags.js";
 import { getConfig } from "../config/loader.js";
-import { rehydratePlatformCredentials } from "../config/platform-rehydration.js";
+import { rehydrateCloudCredentials } from "../config/platform-rehydration.js";
 import { startConversationEvictor } from "../daemon/conversation-evictor.js";
 import { stopMcpServerManager } from "../mcp/manager.js";
 import { MCP_RELOAD_SIGNAL_FILE } from "../mcp/reload-signal.js";
@@ -141,11 +141,11 @@ async function main(): Promise<void> {
 
   // Rehydrate the platform base URL and IDs from the credential store before
   // the first tick. The daemon does this in initializeProvidersAndTools(); this
-  // standalone process must do it itself so getPlatformBaseUrl() resolves to
+  // standalone process must do it itself so getCloudBaseUrl() resolves to
   // the persisted platform environment instead of the CADET_ENVIRONMENT
   // default — otherwise valid credentials are sent to the wrong platform and
   // rejected for both inference and background-wake requests.
-  await rehydratePlatformCredentials();
+  await rehydrateCloudCredentials();
 
   // This process is the sole runner of schedule execution and hosts real agent
   // conversations (wake, execute, and workflow modes), so it needs the default

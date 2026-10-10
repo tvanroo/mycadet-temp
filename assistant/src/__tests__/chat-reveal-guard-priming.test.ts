@@ -20,6 +20,8 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { setOverridesForTesting } from "../__tests__/feature-flag-test-helpers.js";
+
 // ── Store mock: reads stay pending until the test releases them ──────────
 // Only reached on the store-fallback path (a ref with no proven value); the
 // proven path redacts the route-served bytes without touching the store.
@@ -32,12 +34,6 @@ mock.module("../security/secure-keys.js", () => ({
     new Promise<string | null>((resolve) => {
       pendingStoreReads.push(resolve);
     }),
-}));
-
-// Feature flag on regardless of config contents.
-mock.module("../config/assistant-feature-flags.js", () => ({
-  isAssistantFeatureFlagEnabled: (flag: string) =>
-    flag === "chat-credential-reveal",
 }));
 
 mock.module("../config/loader.js", () => ({
@@ -172,6 +168,9 @@ const REVEAL_TOOL_RESULT = {
 } as Extract<AgentEvent, { type: "tool_result" }>;
 
 beforeEach(() => {
+  // Real flag resolution: only chat-credential-reveal is enabled.
+  setOverridesForTesting({ "chat-credential-reveal": true });
+
   _resetStreamStateForTesting();
   _resetRevealSuccessRegistryForTest();
   resetForChatMintRegistryForTest();

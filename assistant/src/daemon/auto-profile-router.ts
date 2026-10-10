@@ -402,10 +402,7 @@ export async function previewAutoProfile(args: {
   signal?: AbortSignal;
 }): Promise<AutoProfileRoute | null> {
   const { llm } = getConfig();
-  const profiles = getConversationProfilesForProvider(
-    llm.profiles,
-    llm.defaultProvider ?? null,
-  );
+  const profiles = getConversationProfilesForProvider(llm);
   if (profiles[AUTO_PROFILE_KEY]?.source !== "managed") {
     return null;
   }

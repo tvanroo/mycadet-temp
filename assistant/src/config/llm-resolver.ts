@@ -39,13 +39,13 @@ import {
  *      user-facing chat-model selection
  *   3. `llm.callSites[callSite].profile` (the call site's named profile)
  *   4. `CALL_SITE_DEFAULTS[callSite].profile` intent resolved through
- *      `llm.defaultProvider`
- *   5. balanced intent through `llm.defaultProvider`: the code-owned anchor
+ *      `llm.default`
+ *   5. balanced intent through `llm.default`: the code-owned anchor
  *      for profileless call sites, or when nothing above is usable
  *
  * A winner must carry its own `provider` AND `model`: the base layer's schema
  * default identity never stands in for a selected profile. The anchor is
- * code-owned and resolved through `llm.defaultProvider`, never through
+ * code-owned and resolved through `llm.default`, never through
  * user-mutable state.
  *
  * `temperature`/`top_p` come only from the winner (or an explicit call-site
@@ -57,7 +57,7 @@ import {
  *
  * Profile names are resolved against the effective profile catalog
  * (code-defined defaults + workspace `llm.profiles`), with default profile
- * keys resolved through `llm.defaultProvider`'s column of the intent ×
+ * keys resolved through `llm.default`'s column of the intent ×
  * provider matrix (see `resolveDefaultProfileForProvider`).
  * A "mix" profile is expanded to one of its arms by a seeded weighted pick (see
  * `resolveProfileFragment` and `opts.selectionSeed`), uniformly wherever a name
@@ -156,7 +156,7 @@ export function resolveCallSiteConfig(
 //
 // Selection is a single-winner chain — each rung is either a complete
 // explicit choice or skipped with a reported reason — bottoming out on the
-// code-owned default intent resolved through `llm.defaultProvider`:
+// code-owned default intent resolved through `llm.default`:
 //   1. `opts.overrideProfile` (conversation/schedule/per-turn pin)
 //   2. `llm.activeProfile` (mainAgent only — it IS that call site's selection)
 //   3. `llm.callSites[callSite].profile`
@@ -261,11 +261,10 @@ function providerAwareEntry(
   llm: z.infer<typeof LLMSchema>,
   name: string,
 ): ProfileEntry | undefined {
-  const defaultProvider = llm.defaultProvider ?? null;
   const entry = resolveDefaultProfileForProvider(
     llm.profiles,
     name,
-    defaultProvider,
+    llm.default,
   );
   if (!isDefaultProfileKey(name) || entry?.mix != null) {
     return entry;
@@ -282,7 +281,7 @@ function providerAwareEntry(
   if (workspace != null && workspace.source !== "managed") {
     return entry;
   }
-  return resolveDefaultProfileForProvider(undefined, name, defaultProvider);
+  return resolveDefaultProfileForProvider(undefined, name, llm.default);
 }
 
 /**
@@ -350,7 +349,7 @@ function usableEntry(
  * always resolve. A legacy disabled stub on a default is likewise reported
  * and overridden: defaults cannot be disabled through any write path, so a
  * persisted disabled stub is stale hatch-era state whose meaning ("no cadet
- * connection") `llm.defaultProvider` expresses properly.
+ * connection") `llm.default` expresses properly.
  */
 function usableDefaultIntent(
   intent: string,
@@ -358,11 +357,10 @@ function usableDefaultIntent(
   opts: ResolveCallSiteOpts,
   report: (requested: string, reason: ResolutionFallbackReason) => void,
 ): ProfileEntry | undefined {
-  const defaultProvider = llm.defaultProvider ?? null;
   let entry = resolveDefaultProfileForProvider(
     llm.profiles,
     intent,
-    defaultProvider,
+    llm.default,
   );
   if (entry?.mix != null) {
     entry = resolveProfileFragment(intent, llm, opts, (n) =>
@@ -385,7 +383,7 @@ function usableDefaultIntent(
   const catalog = resolveDefaultProfileForProvider(
     undefined,
     intent,
-    defaultProvider,
+    llm.default,
   );
   if (catalog != null && catalog.provider != null && catalog.model != null) {
     return catalog;

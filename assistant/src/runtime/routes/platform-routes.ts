@@ -40,10 +40,10 @@ import {
 import { z } from "zod";
 
 import {
-  setPlatformAssistantId,
-  setPlatformBaseUrl,
-  setPlatformOrganizationId,
-  setPlatformUserId,
+  setCloudAssistantId,
+  setCloudBaseUrl,
+  setCloudOrganizationId,
+  setCloudUserId,
 } from "../../config/env.js";
 import { isPlatformRemote } from "../../config/env-registry.js";
 import {
@@ -314,7 +314,7 @@ async function handlePlatformStatus(
 
   return {
     isPlatform: context.isPlatform,
-    baseUrl: context.platformBaseUrl,
+    baseUrl: context.cloudBaseUrl,
     assistantId: context.assistantId,
     hasAssistantApiKey: context.hasAssistantApiKey,
     hasWebhookSecret,
@@ -470,10 +470,10 @@ async function handlePlatformDisconnect(
     );
   }
 
-  setPlatformBaseUrl(undefined);
-  setPlatformAssistantId(undefined);
-  setPlatformOrganizationId(undefined);
-  setPlatformUserId(undefined);
+  setCloudBaseUrl(undefined);
+  setCloudAssistantId(undefined);
+  setCloudOrganizationId(undefined);
+  setCloudUserId(undefined);
 
   // Notify connected clients
   broadcastMessage({ type: "platform_disconnected" });
@@ -676,13 +676,13 @@ async function fetchPlatformJson(
 ): Promise<unknown> {
   const context = await resolvePlatformCallbackRegistrationContext();
 
-  if (!context.platformBaseUrl || !context.authHeader) {
+  if (!context.cloudBaseUrl || !context.authHeader) {
     throw new UnprocessableEntityError(
       "Cloud credentials not available — run 'assistant cloud connect' or set CADET_PLATFORM_URL",
     );
   }
 
-  const url = `${context.platformBaseUrl}${path}`;
+  const url = `${context.cloudBaseUrl}${path}`;
   const timeout = AbortSignal.timeout(
     options?.timeoutMs ?? PLATFORM_FETCH_TIMEOUT_MS,
   );

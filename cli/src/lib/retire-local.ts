@@ -128,34 +128,11 @@ export async function retireLocal(
 
   // Stop gateway via PID file — use a longer timeout because the gateway has a
   // drain window (5s) before it exits.
-  const gatewayPidFile = join(cadetDir, "gateway.pid");
-  await stopProcessByPidFile(gatewayPidFile, "gateway", undefined, 7000);
+  await stopProcessByPidFile(join(cadetDir, "gateway.pid"), "gateway", undefined, 7000);
 
   // Stop the CES sibling — it is stopped by its PID file, a no-op when the
   // PID file is absent (e.g. the sibling was never started or already exited).
-  const cesPidFile = join(cadetDir, "ces.pid");
-  const cesStopped = await stopProcessByPidFile(
-    cesPidFile,
-    "credential-executor",
-  );
-  if (cesStopped) {
-    reporter.log("credential-executor stopped.");
-  }
-
-  // Stop Qdrant. The daemon's graceful shutdown tries to stop it via
-  // qdrantManager.stop(), but a daemon that never completes that shutdown
-  // (crash, OOM kill, or the SIGKILL ceiling above) leaves Qdrant running as
-  // an orphan. Check both the current PID file location and the legacy one.
-  const qdrantPidFile = join(
-    cadetDir,
-    "workspace",
-    "data",
-    "qdrant",
-    "qdrant.pid",
-  );
-  const qdrantLegacyPidFile = join(cadetDir, "qdrant.pid");
-  await stopProcessByPidFile(qdrantPidFile, "qdrant", undefined, 5000);
-  await stopProcessByPidFile(qdrantLegacyPidFile, "qdrant", undefined, 5000);
+  await stopProcessByPidFile(join(cadetDir, "ces.pid"), "credential-executor");
 
   // Stop the nginx ingress if one is fronting this gateway — it would
   // otherwise be orphaned when the instance directory is archived.

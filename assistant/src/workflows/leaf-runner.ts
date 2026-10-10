@@ -333,11 +333,7 @@ function validateProfile(profile: string): string {
 function profileExists(profile: string): boolean {
   const { llm } = getConfig();
   return (
-    resolveDefaultProfileForProvider(
-      llm.profiles,
-      profile,
-      llm.defaultProvider ?? null,
-    ) != null
+    resolveDefaultProfileForProvider(llm.profiles, profile, llm.default) != null
   );
 }
 

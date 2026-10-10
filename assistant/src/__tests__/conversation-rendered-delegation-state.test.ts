@@ -9,6 +9,7 @@
  */
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { setAllFlagsOnForTesting } from "../__tests__/feature-flag-test-helpers.js";
 import { CompactionCircuit } from "../agent/compaction-circuit.js";
 import type { AgentEvent } from "../agent/loop.js";
 import type { AssistantEvent } from "../api/index.js";
@@ -21,10 +22,6 @@ import type { Message, ProviderResponse } from "../providers/types.js";
 mock.module("../providers/registry.js", () => ({
   getProvider: () => ({ name: "mock-provider" }),
   initializeProviders: async () => {},
-}));
-
-mock.module("../config/assistant-feature-flags.js", () => ({
-  isAssistantFeatureFlagEnabled: () => true,
 }));
 
 // The builder under the conversation's control: records the options each
@@ -189,6 +186,9 @@ function lastBuildDelegation(): unknown {
 }
 
 beforeEach(() => {
+  // Real flag resolution replaces the former blanket module mock.
+  setAllFlagsOnForTesting();
+
   builtWith = [];
   throwOnBuild = false;
 });

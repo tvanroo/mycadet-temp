@@ -35,6 +35,7 @@ import {
   scrubNulledChatSettings,
   validateChatSettingsWrite,
 } from "../../config/chat-settings.js";
+import { DefaultProviderSelectionSchema } from "../../config/default-provider.js";
 import {
   catalogEntryFor,
   type InputModalities,
@@ -62,9 +63,11 @@ import { getSchemaAtPath } from "../../config/schema-utils.js";
 import { AutoArchiveConfigSchema } from "../../config/schemas/conversations.js";
 import {
   collectFallbackProfileIssues,
-  DefaultProviderSchema,
+  isDefaultProviderChoice,
   LLMConfigBase,
   LLMConfigFragment,
+  LLMDefaultConfigSchema,
+  LLMSchema,
   ProfileEntry,
   routingIdentityModelIssue,
   unknownLlmProviderIssue,
@@ -761,17 +764,27 @@ const MemoryWireConfigSchema = z
  */
 const ConfigGetResponseSchema = z
   .object({
+    // A malformed or absent stored chat-settings subtree falls back to its
+    // schema defaults so one bad leaf can't fail the whole wire parse (which
+    // would strip every derived field from the response); the chat-settings
+    // read overlay refills both from the effective config.
     conversations: z
-      .object({ autoArchive: AutoArchiveConfigSchema.passthrough() })
+      .object({
+        autoArchive: AutoArchiveConfigSchema.passthrough().catch(
+          AutoArchiveConfigSchema.parse({}),
+        ),
+      })
       .passthrough()
       .optional(),
-    notifications: NotificationsConfigSchema.passthrough().optional(),
+    notifications: NotificationsConfigSchema.passthrough()
+      .optional()
+      .catch(undefined),
     llm: z
       .object({
-        default: LLMConfigFragment.extend({
-          provider_connection: z.string().optional(),
-        }).optional(),
-        defaultProvider: DefaultProviderSchema.optional(),
+        default: LLMDefaultConfigSchema.optional(),
+        // Wire-compat view of the default provider, derived from `default`
+        // by the read overlay (the key is never stored anymore).
+        defaultProvider: DefaultProviderSelectionSchema.optional(),
         profiles: z.record(z.string(), WireProfileEntry).optional(),
         profileOrder: z.array(z.string()).optional(),
         activeProfile: z.string().optional(),
@@ -827,6 +840,8 @@ const ConfigGetResponseSchema = z
   })
   .passthrough()
   .meta({ id: "ConfigGetResponse" });
+
+type ConfigGetResponse = z.infer<typeof ConfigGetResponseSchema>;
 
 /**
  * Given a `z.object(...)` schema, returns a new schema where every property
@@ -941,34 +956,61 @@ const ConfigPatchRequestSchema = z
 function handleGetConfig() {
   try {
     const config = applyContextDefaultsToRawConfig(loadRawConfig());
-    overlayWorkspaceMcpForConfigRead(config);
-    sanitizeMcpTransportHeadersForSettingsRead(config);
-    overlayEffectiveProfilesForWire(config);
-    enrichProfilesForWire(config);
-    overlayChatSettingsForWire(config);
-    return config;
+    // One zod pass shapes the response: ConfigGetResponseSchema is this
+    // route's wire contract, so the overlays stamp their derived fields on
+    // the parsed view instead of digging handles out of raw objects. A
+    // config the schema rejects gets no overlays and is served raw.
+    const parsed = ConfigGetResponseSchema.safeParse(config);
+    if (!parsed.success) {
+      return config;
+    }
+    const wire = parsed.data;
+    overlayWorkspaceMcpForConfigRead(wire);
+    sanitizeMcpTransportHeadersForSettingsRead(wire);
+    overlayEffectiveProfilesForWire(wire);
+    enrichProfilesForWire(wire);
+    overlayDefaultProviderForWire(wire);
+    overlayChatSettingsForWire(wire);
+    return wire;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new InternalError(`Failed to read config: ${message}`);
   }
 }
 
-function overlayChatSettingsForWire(config: unknown): void {
-  const root = readPlainObject(config);
-  if (!root) {
+/**
+ * Surface the default-provider selection on config reads. The selection lives
+ * in the `llm.default` blob; the dedicated `defaultProvider` response field is
+ * a derived wire-compat view (readers of the config GET predate the blob) and
+ * is never stored on disk — it is stamped here from the blob on every read.
+ */
+function overlayDefaultProviderForWire(config: ConfigGetResponse): void {
+  if (!config.llm) {
     return;
   }
+  const blob = config.llm.default;
+  const provider = blob?.provider;
+  if (provider != null && isDefaultProviderChoice(provider)) {
+    config.llm.defaultProvider = {
+      provider,
+      connectionName: blob?.provider_connection,
+    };
+  } else {
+    delete config.llm.defaultProvider;
+  }
+}
+
+function overlayChatSettingsForWire(config: ConfigGetResponse): void {
   const effective = getConfig();
-  const conversations = readPlainObject(root.conversations);
-  root.conversations = {
-    ...conversations,
+  config.conversations = {
+    ...config.conversations,
     autoArchive: {
-      ...readPlainObject(conversations?.autoArchive),
+      ...config.conversations?.autoArchive,
       ...effective.conversations.autoArchive,
     },
   };
-  root.notifications = {
-    ...readPlainObject(root.notifications),
+  config.notifications = {
+    ...config.notifications,
     newMessageEnabled: effective.notifications.newMessageEnabled,
   };
 }
@@ -979,33 +1021,25 @@ function overlayChatSettingsForWire(config: unknown): void {
  * profile CONTENT is code-owned and the workspace holds at most a thin stub,
  * but clients (settings UI, sticky-profile pickers) need the full bodies to
  * render labels/models — so the wire view materializes them, resolved through
- * `llm.defaultProvider`'s column of the intent × provider matrix so a BYO
+ * `llm.default`'s column of the intent × provider matrix so a BYO
  * install sees the provider/model that actually dispatches. Wire-only:
  * `normalizeManagedProfileWrites` reduces echoed bodies back to the
  * workspace-owned fields on the write paths, so a `config get` →
  * `config set` round-trip never persists catalog content — the two must
  * resolve through the same column or honest round-trips are rejected.
  *
- * `defaultProvider` deliberately comes from the parsed config, not the raw
- * object this function mutates: the schema's `.catch(undefined)` shields the
- * matrix lookup from an invalid persisted value, which a raw read would feed
- * straight into resolution. The raw profiles and the cached parse cannot
- * disagree on `defaultProvider` — every write path that touches it
- * invalidates the config cache.
+ * The profiles come from one schema parse of the `llm` block being served
+ * through the real `LLMSchema`, whose `isDefaultProviderChoice` clamp
+ * shields the matrix lookup from a persisted value the matrix cannot
+ * implement, which a raw read would feed straight into resolution.
  */
-function overlayEffectiveProfilesForWire(config: unknown): void {
-  const root = readPlainObject(config);
-  if (!root) {
-    return;
+function overlayEffectiveProfilesForWire(config: ConfigGetResponse): void {
+  if (!config.llm) {
+    config.llm = {};
   }
-  const existingLlm = readPlainObject(root.llm);
-  const llm = existingLlm ?? {};
-  if (!existingLlm) {
-    root.llm = llm;
-  }
-  llm.profiles = getUserSelectableProfilesForProvider(
-    readPlainObject(llm.profiles) as Record<string, ProfileEntry> | undefined,
-    getConfig().llm.defaultProvider ?? null,
+  const parsedLlm = LLMSchema.safeParse(config.llm);
+  config.llm.profiles = getUserSelectableProfilesForProvider(
+    parsedLlm.success ? parsedLlm.data : undefined,
   );
 }
 
@@ -1097,7 +1131,7 @@ export function normalizeManagedProfileWrites(patch: unknown): void {
       resolveDefaultProfileForProvider(
         currentProfiles,
         name,
-        getConfig().llm.defaultProvider ?? null,
+        getConfig().llm.default,
       ),
     );
     for (const key of Object.keys(entry)) {
@@ -1527,11 +1561,11 @@ function assertRoutableIdentityEntries(
 function assertCodeOwnedFallbackProfiles(raw: Record<string, unknown>): void {
   const llm = readPlainObject(raw.llm);
   const profiles = readPlainObject(llm?.profiles);
-  // The sibling `llm.defaultProvider` decides whether the managed backups are
-  // valid fallback targets: they resolve on the managed column alone.
+  // The sibling `llm.default` decides whether the managed backups are valid
+  // fallback targets: they resolve on the managed column alone.
   const issues = collectFallbackProfileIssues(
     profiles ?? undefined,
-    llm?.defaultProvider,
+    llm?.default,
   );
   if (issues.length > 0) {
     throw new BadRequestError(issues.map((issue) => issue.message).join(" "));
@@ -1939,10 +1973,7 @@ async function handleReplaceInferenceProfile({
     // Validate arms against the effective view (matches the resolver and
     // `LLMSchema.superRefine`), not the raw workspace record.
     const { llm: parsedLlm } = getConfig();
-    const existingProfiles = getEffectiveProfilesForProvider(
-      parsedLlm.profiles,
-      parsedLlm.defaultProvider ?? null,
-    );
+    const existingProfiles = getEffectiveProfilesForProvider(parsedLlm);
     parsed.data.mix.forEach((arm, index) => {
       if (arm.profile === name) {
         throw new BadRequestError(
@@ -1987,10 +2018,7 @@ async function handleReplaceInferenceProfile({
       );
     }
     const { llm: parsedLlm } = getConfig();
-    const existingProfiles = getEffectiveProfilesForProvider(
-      parsedLlm.profiles,
-      parsedLlm.defaultProvider ?? null,
-    );
+    const existingProfiles = getEffectiveProfilesForProvider(parsedLlm);
     const target = existingProfiles[fallback];
     if (target == null) {
       throw new BadRequestError(

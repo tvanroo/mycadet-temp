@@ -26,7 +26,7 @@ interface MockProfileEntry {
 }
 
 let mockProfiles: Record<string, MockProfileEntry> = {};
-let mockDefaultProvider: { provider: string; connectionName?: string } | null =
+let mockDefault: { provider: string; provider_connection?: string } | null =
   null;
 
 // Real model catalog — don't mock it, the test exercises real catalog lookups.
@@ -56,24 +56,22 @@ function applyConfig(): void {
   const config = getConfig() as { llm: unknown };
   config.llm = {
     profiles: mockProfiles,
-    ...(mockDefaultProvider != null
-      ? { defaultProvider: mockDefaultProvider }
-      : {}),
+    ...(mockDefault != null ? { default: mockDefault } : {}),
   };
 }
 
 function setMockConfig(
   profiles: Record<string, MockProfileEntry>,
-  defaultProvider?: { provider: string; connectionName?: string },
+  defaultBlob?: { provider: string; provider_connection?: string },
 ) {
   mockProfiles = profiles;
-  mockDefaultProvider = defaultProvider ?? null;
+  mockDefault = defaultBlob ?? null;
   applyConfig();
 }
 
 beforeEach(() => {
   mockProfiles = {};
-  mockDefaultProvider = null;
+  mockDefault = null;
   applyConfig();
 });
 
@@ -246,7 +244,7 @@ describe("doesSupportVision with a BYO default provider", () => {
   });
 
   test("without a default provider, a default profile judges the managed column", () => {
-    // Null-reduction: no defaultProvider resolves cost-optimized through the
+    // Null-reduction: no default provider resolves cost-optimized through the
     // cadet column (deepseek-v4p1-flash, vision-capable).
     setMockConfig({});
     expect(doesSupportVision(profile("cost-optimized"))).toBe(true);

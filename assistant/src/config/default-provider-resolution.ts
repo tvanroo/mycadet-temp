@@ -1,37 +1,32 @@
-/**
- * Pure default-provider read helpers — no `config/loader` imports, by design.
- * Route handlers (and their tests, which often partially mock the loader)
- * import from here so that pulling default-provider logic into a module graph
- * never drags write-side loader exports along with it. Loader-coupled
- * conveniences (`getDefaultProvider()` without an argument,
- * `setDefaultProvider`) live in `default-provider.ts`.
- */
 import { CADET_MANAGED_CONNECTION_NAME } from "../providers/cadet-model-routing.js";
 import { CHATGPT_SUBSCRIPTION_CONNECTION_NAME } from "../providers/inference/auth.js";
-import type { DefaultProviderConfig } from "./schemas/llm.js";
-import type { AssistantConfig } from "./types.js";
-
-export function getDefaultProviderFromConfig(
-  config: AssistantConfig,
-): DefaultProviderConfig | null {
-  return config.llm.defaultProvider ?? null;
-}
+import {
+  isDefaultProviderChoice,
+  type LLMDefaultConfig,
+} from "./schemas/llm.js";
 
 /**
- * Pure by design — no connection-existence check. A dangling name (explicit
- * or conventional) is allowed; see `DefaultProviderSchema`.
+ * The connection the default provider dispatches through: an explicit
+ * `provider_connection` pin, else the per-provider convention name. Returns
+ * null when the blob carries no provider the intent × provider matrix can
+ * implement — there is no connection to resolve. Pure by design — no
+ * connection-existence check; a dangling name is allowed.
  */
 export function resolveDefaultConnectionName(
-  dp: DefaultProviderConfig,
-): string {
-  if (dp.connectionName) {
-    return dp.connectionName;
+  dp: LLMDefaultConfig | undefined,
+): string | null {
+  const provider = dp?.provider;
+  if (provider == null || !isDefaultProviderChoice(provider)) {
+    return null;
   }
-  if (dp.provider === "cadet") {
+  if (dp?.provider_connection) {
+    return dp.provider_connection;
+  }
+  if (provider === "cadet") {
     return CADET_MANAGED_CONNECTION_NAME;
   }
-  if (dp.provider === "chatgpt") {
+  if (provider === "chatgpt") {
     return CHATGPT_SUBSCRIPTION_CONNECTION_NAME;
   }
-  return `${dp.provider}-personal`;
+  return `${provider}-personal`;
 }

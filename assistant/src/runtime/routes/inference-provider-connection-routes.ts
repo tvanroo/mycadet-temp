@@ -11,11 +11,8 @@
 import { z } from "zod";
 
 import { getEffectiveProfilesForProvider } from "../../config/default-profile-catalog.js";
-import {
-  getDefaultProviderFromConfig,
-  resolveDefaultConnectionName,
-} from "../../config/default-provider-resolution.js";
-import { getIsPlatform } from "../../config/env-registry.js";
+import { resolveDefaultConnectionName } from "../../config/default-provider-resolution.js";
+import { getIsCloud } from "../../config/env-registry.js";
 import { getConfigReadOnly } from "../../config/loader.js";
 import { getDb } from "../../persistence/db-connection.js";
 import {
@@ -148,7 +145,7 @@ async function parseCustomProviderFields(
       // runs on Cadet infrastructure. Self-hosted daemons run on the user's
       // own machine, so localhost/private addresses are the expected target
       // (e.g. LM Studio, vLLM, text-generation-webui).
-      if (getIsPlatform()) {
+      if (getIsCloud()) {
         const hostname = parsed.hostname;
         if (isPrivateOrLocalHost(hostname)) {
           throw new BadRequestError(
@@ -620,7 +617,7 @@ async function handleDeleteConnection({ pathParams = {} }: RouteHandlerArgs) {
 
   const config = getConfigReadOnly();
 
-  // llm.defaultProvider: guards both the resolved connection name (explicit
+  // llm.default: guards both the resolved connection name (explicit
   // `connectionName` or the `<provider>-personal` convention) and the case
   // where the convention name is dangling but this is the last remaining
   // connection for the default's provider — resolution treats a dangling
@@ -630,28 +627,30 @@ async function handleDeleteConnection({ pathParams = {} }: RouteHandlerArgs) {
   // (protected above), so unrelated same-provider rows stay deletable. Legacy
   // managed rows are excluded from the count for the same reason the list
   // route hides them — they aren't user-manageable connections.
-  const dp = getDefaultProviderFromConfig(config);
+  const dp = config.llm.default;
+  const defaultConnectionName = resolveDefaultConnectionName(dp);
   // A `cadet` default resolves to the canonical name, so this guard would
   // otherwise block deleting a row that merely claims that name. Deleting it
   // does not orphan the default: boot seeding writes the real managed
   // connection under the same name on the next restart.
-  if (dp && !claimsManagedName) {
-    if (name === resolveDefaultConnectionName(dp)) {
+  if (defaultConnectionName != null && !claimsManagedName) {
+    if (name === defaultConnectionName) {
       throw new ConflictError(
-        `Connection "${name}" is referenced by llm.defaultProvider. Update llm.defaultProvider before deleting.`,
-        { referencedBy: ["llm.defaultProvider"] },
+        `Connection "${name}" is referenced by llm.default (its provider_connection pin). Update the pin before deleting.`,
+        { referencedBy: ["llm.default"] },
       );
     }
     if (
-      !dp.connectionName &&
+      !dp?.provider_connection &&
+      dp?.provider != null &&
       existing.provider === dp.provider &&
       listConnections(getDb(), { provider: dp.provider }).filter(
         (c) => !LEGACY_MANAGED_CONNECTION_NAMES.has(c.name),
       ).length === 1
     ) {
       throw new ConflictError(
-        `Connection "${name}" is the only connection for provider "${dp.provider}", which llm.defaultProvider depends on. Update llm.defaultProvider or add another connection for provider "${dp.provider}" before deleting.`,
-        { referencedBy: ["llm.defaultProvider"] },
+        `Connection "${name}" is the only connection for provider "${dp.provider}", which llm.default depends on. Update llm.default or add another connection for provider "${dp.provider}" before deleting.`,
+        { referencedBy: ["llm.default"] },
       );
     }
   }
@@ -660,10 +659,10 @@ async function handleDeleteConnection({ pathParams = {} }: RouteHandlerArgs) {
   // provider-aware so the scan sees the same bodies the runtime resolver
   // produces: on a BYO install the default profiles carry the
   // `provider_connection` they actually dispatch through. Today every name
-  // the defaults can stamp is also caught by the `llm.defaultProvider` guard
+  // the defaults can stamp is also caught by the `llm.default` pin guard
   // above; this keeps the scan a faithful backstop rather than one that
   // silently skips the defaults.
-  const profiles = getEffectiveProfilesForProvider(config.llm?.profiles, dp);
+  const profiles = getEffectiveProfilesForProvider(config.llm);
   // A binding lives in `provider` (the entry name) under the entries model,
   // or in the legacy `provider_connection` field; both count, or deleting a
   // bound entry would dangle the profile behind selection's silent healing.

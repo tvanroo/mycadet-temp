@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { useMemorySecureKeys } from "../../__tests__/helpers/secure-keys.js";
 import {
-  getPlatformBaseUrl,
-  setPlatformAssistantId,
-  setPlatformBaseUrl,
-  setPlatformOrganizationId,
-  setPlatformUserId,
+  getCloudBaseUrl,
+  setCloudAssistantId,
+  setCloudBaseUrl,
+  setCloudOrganizationId,
+  setCloudUserId,
 } from "../env.js";
 
 useMemorySecureKeys();
@@ -132,10 +132,10 @@ describe("resolvePlatformAssistantId", () => {
       return fetchImpl(input, init);
     }) as unknown as typeof fetch;
     delete process.env.ASSISTANT_API_KEY;
-    setPlatformBaseUrl(undefined);
-    setPlatformAssistantId(undefined);
-    setPlatformOrganizationId(undefined);
-    setPlatformUserId(undefined);
+    setCloudBaseUrl(undefined);
+    setCloudAssistantId(undefined);
+    setCloudOrganizationId(undefined);
+    setCloudUserId(undefined);
     _resetPlatformIdentityEnsureForTests();
   });
 
@@ -151,15 +151,15 @@ describe("resolvePlatformAssistantId", () => {
     } else {
       process.env.CADET_PLATFORM_URL = originalPlatformUrlEnv;
     }
-    setPlatformBaseUrl(undefined);
-    setPlatformAssistantId(undefined);
-    setPlatformOrganizationId(undefined);
-    setPlatformUserId(undefined);
+    setCloudBaseUrl(undefined);
+    setCloudAssistantId(undefined);
+    setCloudOrganizationId(undefined);
+    setCloudUserId(undefined);
     _resetPlatformIdentityEnsureForTests();
   });
 
   test("returns the in-memory override without calling validate", async () => {
-    setPlatformAssistantId(ASSISTANT_ID);
+    setCloudAssistantId(ASSISTANT_ID);
     process.env.ASSISTANT_API_KEY = "assistant-key";
     await expect(resolvePlatformAssistantId()).resolves.toBe(ASSISTANT_ID);
     expect(fetchCalls).toHaveLength(0);
@@ -172,7 +172,7 @@ describe("resolvePlatformAssistantId", () => {
 
   test("loads ids from validate when the in-memory override is empty", async () => {
     process.env.ASSISTANT_API_KEY = "assistant-key";
-    setPlatformBaseUrl(BASE_URL);
+    setCloudBaseUrl(BASE_URL);
     fetchImpl = async () =>
       new Response(
         JSON.stringify({
@@ -186,13 +186,13 @@ describe("resolvePlatformAssistantId", () => {
     await expect(resolvePlatformAssistantId()).resolves.toBe(ASSISTANT_ID);
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0]?.url).toBe(
-      `${getPlatformBaseUrl().replace(/\/+$/, "")}${PLATFORM_IDENTITY_VALIDATE_PATH}`,
+      `${getCloudBaseUrl().replace(/\/+$/, "")}${PLATFORM_IDENTITY_VALIDATE_PATH}`,
     );
   });
 
   test("does not retry validate during the cooldown after a failure", async () => {
     process.env.ASSISTANT_API_KEY = "assistant-key";
-    setPlatformBaseUrl(BASE_URL);
+    setCloudBaseUrl(BASE_URL);
     fetchImpl = async () => new Response("down", { status: 503 });
 
     await expect(resolvePlatformAssistantId()).resolves.toBe("");
@@ -202,7 +202,7 @@ describe("resolvePlatformAssistantId", () => {
 
   test("retries validate inside the cooldown once a different API key is stored", async () => {
     process.env.ASSISTANT_API_KEY = "rejected-key";
-    setPlatformBaseUrl(BASE_URL);
+    setCloudBaseUrl(BASE_URL);
     fetchImpl = async () => new Response("no", { status: 401 });
 
     await expect(resolvePlatformAssistantId()).resolves.toBe("");
@@ -255,7 +255,7 @@ describe("resolvePlatformAssistantId", () => {
 
   test("retries validate after a failed attempt once the cooldown is cleared", async () => {
     process.env.ASSISTANT_API_KEY = "assistant-key";
-    setPlatformBaseUrl(BASE_URL);
+    setCloudBaseUrl(BASE_URL);
     fetchImpl = async () => new Response("down", { status: 503 });
 
     await expect(resolvePlatformAssistantId()).resolves.toBe("");
@@ -276,7 +276,7 @@ describe("resolvePlatformAssistantId", () => {
 
   test("concurrent resolves share one in-flight validate", async () => {
     process.env.ASSISTANT_API_KEY = "assistant-key";
-    setPlatformBaseUrl(BASE_URL);
+    setCloudBaseUrl(BASE_URL);
     let release!: (value: Response) => void;
     let notifyFetchStarted!: () => void;
     const fetchStarted = new Promise<void>((resolve) => {

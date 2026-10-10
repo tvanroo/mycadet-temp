@@ -43,7 +43,7 @@ mock.module("../../../config/assistant-feature-flags.js", () => ({
 // Mock platform detection: tests default to platform mode (SSRF enforced).
 // Individual tests can override via `mockIsPlatform = false`. Spread the real
 // module so the config loader's transitive `util/platform` imports still
-// resolve — only `getIsPlatform` is overridden.
+// resolve — only `getIsCloud` is overridden.
 let mockIsPlatform = true;
 
 const realEnvRegistry = {
@@ -51,7 +51,7 @@ const realEnvRegistry = {
 };
 mock.module("../../../config/env-registry.js", () => ({
   ...realEnvRegistry,
-  getIsPlatform: () => mockIsPlatform,
+  getIsCloud: () => mockIsPlatform,
 }));
 
 // Mock DNS resolution: all hostnames resolve to a public IP by default.
@@ -138,7 +138,9 @@ describe("base_url provider-type gate (create)", () => {
           base_url: "https://evil.example.com/v1",
         },
       }),
-    ).rejects.toThrow(/base_url is only valid for openai-compatible, ollama, litellm, and opencode/);
+    ).rejects.toThrow(
+      /base_url is only valid for openai-compatible, ollama, litellm, and opencode/,
+    );
   });
 
   test("rejects base_url on openai provider", async () => {
@@ -151,7 +153,9 @@ describe("base_url provider-type gate (create)", () => {
           base_url: "https://evil.example.com/v1",
         },
       }),
-    ).rejects.toThrow(/base_url is only valid for openai-compatible, ollama, litellm, and opencode/);
+    ).rejects.toThrow(
+      /base_url is only valid for openai-compatible, ollama, litellm, and opencode/,
+    );
   });
 
   test("rejects base_url on gemini provider", async () => {
@@ -164,7 +168,9 @@ describe("base_url provider-type gate (create)", () => {
           base_url: "https://evil.example.com/v1",
         },
       }),
-    ).rejects.toThrow(/base_url is only valid for openai-compatible, ollama, litellm, and opencode/);
+    ).rejects.toThrow(
+      /base_url is only valid for openai-compatible, ollama, litellm, and opencode/,
+    );
   });
 
   test("accepts base_url on openai-compatible provider", async () => {
@@ -463,7 +469,9 @@ describe("base_url provider-type gate (update)", () => {
           base_url: "https://evil.example.com/v1",
         },
       }),
-    ).rejects.toThrow(/base_url is only valid for openai-compatible, ollama, litellm, and opencode/);
+    ).rejects.toThrow(
+      /base_url is only valid for openai-compatible, ollama, litellm, and opencode/,
+    );
   });
 
   test("accepts adding base_url to an existing ollama connection", async () => {

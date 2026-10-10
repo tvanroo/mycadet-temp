@@ -70,7 +70,6 @@ import { getWorkflowRunManager } from "../workflows/run-manager.js";
 import { repairAdaptiveThinkingOnManagedProfiles } from "../workspace/adaptive-thinking-repair.js";
 import { ensureByokDefaultProfiles } from "../workspace/byok-default-profile-ensure.js";
 import { ensureCompleteCustomProfiles } from "../workspace/custom-profile-ensure.js";
-import { ensureDefaultProvider } from "../workspace/default-provider-ensure.js";
 import { WORKSPACE_MIGRATIONS } from "../workspace/migrations/registry.js";
 import { runWorkspaceMigrations } from "../workspace/migrations/runner.js";
 import { startConfigWatcher } from "./config-watcher.js";
@@ -551,7 +550,7 @@ export async function runDaemon(): Promise<void> {
   const defaultConfigMerge = mergeDefaultWorkspaceConfig();
 
   // Seed inference profiles into the workspace config: active/advisor
-  // resolution plus, on off-platform hatches, `llm.defaultProvider` and a
+  // resolution plus, on off-platform hatches, `llm.default` and a
   // personal provider connection for the hatch provider.
   try {
     seedInferenceProfiles({
@@ -584,22 +583,8 @@ export async function runDaemon(): Promise<void> {
     }
   }
 
-  // Runs on every boot (unlike the repair above, not gated on hadOverlay) so
-  // it also covers hand-deleted fields and configs restored from backups
-  // that predate the field. See workspace/default-provider-ensure.ts for the
-  // full rationale.
-  try {
-    await ensureDefaultProvider(getWorkspaceDir());
-    log.info("Default provider ensure pass complete");
-  } catch (err) {
-    log.warn(
-      { err },
-      "Default provider ensure pass failed — continuing startup",
-    );
-  }
-
   // Runs on every boot, after the default-provider ensure (it keys off
-  // llm.defaultProvider) and before custom-profile materialization (so
+  // the llm.default blob) and before custom-profile materialization (so
   // copies it retires this boot are never pointlessly materialized first;
   // its comparison normalizes both sides through the same completion, so
   // ordering is not correctness-bearing).

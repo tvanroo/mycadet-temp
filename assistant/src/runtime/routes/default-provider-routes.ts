@@ -1,30 +1,28 @@
 /**
- * Route handlers for the workspace default provider (`llm.defaultProvider`).
+ * Route handlers for the workspace default provider, stored in the
+ * `llm.default` blob (`provider` + `provider_connection`).
  *
  * GET /v1/config/llm/default-provider — current value + availability status
  * PUT /v1/config/llm/default-provider — replace the value (strict-validated)
  *
  * The dedicated PUT exists because the generic config write paths parse
- * `llm.defaultProvider` through `.catch(undefined)` — an invalid value is
- * silently dropped on the next reparse instead of rejected. This route
- * strict-parses and fails loudly.
+ * `llm.default` as a partial fragment — a provider the matrix cannot
+ * implement is silently dropped or clamped to the managed column on the next
+ * reparse instead of rejected. This route strict-parses and fails loudly.
  *
- * Availability is reported, never enforced: a dangling connection name is a
- * valid persisted state by design (see `DefaultProviderSchema`), and the GET
- * names what is broken and how to fix it.
+ * Availability is reported, never enforced: a dangling connection pin is a
+ * valid persisted state by design (see `DefaultProviderSelectionSchema`),
+ * and the GET names what is broken and how to fix it.
  */
 import { z } from "zod";
 
-import { setDefaultProvider } from "../../config/default-provider.js";
 import {
-  getDefaultProviderFromConfig,
-  resolveDefaultConnectionName,
-} from "../../config/default-provider-resolution.js";
+  DefaultProviderSelectionSchema,
+  setDefaultProvider,
+} from "../../config/default-provider.js";
+import { resolveDefaultConnectionName } from "../../config/default-provider-resolution.js";
 import { getConfigReadOnly } from "../../config/loader.js";
-import {
-  DEFAULT_PROVIDER_CHOICES,
-  DefaultProviderSchema,
-} from "../../config/schemas/llm.js";
+import { DEFAULT_PROVIDER_CHOICES } from "../../config/schemas/llm.js";
 import { ROUTING_IDENTITY_PROVIDERS } from "../../providers/inference/auth.js";
 import {
   computeConnectionAvailability,
@@ -60,8 +58,10 @@ type DefaultProviderStatus = z.infer<typeof defaultProviderStatusSchema>;
 const SETTINGS_HINT = "in Settings → Models & Services";
 
 async function handleGetDefaultProvider(): Promise<DefaultProviderStatus> {
-  const dp = getDefaultProviderFromConfig(getConfigReadOnly());
-  if (!dp) {
+  const blob = getConfigReadOnly().llm.default;
+  const provider = blob?.provider;
+  const resolvedConnectionName = resolveDefaultConnectionName(blob);
+  if (provider == null || resolvedConnectionName == null) {
     return {
       provider: null,
       resolvedConnectionName: null,
@@ -71,13 +71,12 @@ async function handleGetDefaultProvider(): Promise<DefaultProviderStatus> {
       },
     };
   }
-  const resolvedConnectionName = resolveDefaultConnectionName(dp);
   return {
-    provider: dp.provider,
-    ...(dp.connectionName ? { connectionName: dp.connectionName } : {}),
+    provider,
+    connectionName: blob?.provider_connection,
     resolvedConnectionName,
     availability: await computeConnectionAvailability(
-      dp.provider,
+      provider,
       resolvedConnectionName,
     ),
   };
@@ -86,7 +85,7 @@ async function handleGetDefaultProvider(): Promise<DefaultProviderStatus> {
 async function handlePutDefaultProvider({
   body = {},
 }: RouteHandlerArgs): Promise<DefaultProviderStatus> {
-  const result = DefaultProviderSchema.safeParse(body);
+  const result = DefaultProviderSelectionSchema.safeParse(body);
   if (!result.success) {
     throw new BadRequestError(
       `Invalid default provider. "provider" must be one of: ${DEFAULT_PROVIDER_CHOICES.join(
@@ -124,7 +123,7 @@ export const ROUTES: RouteDefinition[] = [
     handler: handleGetDefaultProvider,
     summary: "Get the default provider and its availability",
     description:
-      "Returns `llm.defaultProvider`, the connection name it resolves to, and whether that connection is currently usable (connection exists, credential stored, Cadet authenticated). Availability is informational — a broken default is a valid persisted state that surfaces explainable errors at resolution time.",
+      "Returns the default provider stored in `llm.default`, the connection name it resolves to, and whether that connection is currently usable (connection exists, credential stored, Cadet authenticated). Availability is informational — a broken default is a valid persisted state that surfaces explainable errors at resolution time.",
     tags: ["config"],
     responseBody: defaultProviderStatusSchema,
   },
@@ -139,9 +138,9 @@ export const ROUTES: RouteDefinition[] = [
     handler: handlePutDefaultProvider,
     summary: "Set the default provider",
     description:
-      "Replaces `llm.defaultProvider`. Strict-validates the body (unlike the generic config write paths, which silently drop invalid values). Does not require the referenced connection to exist — a dangling name is allowed by design and reported via the availability status.",
+      "Replaces the default provider stored in the `llm.default` blob. Strict-validates the body (unlike the generic config write paths, which silently drop or clamp invalid values). Does not require the referenced connection to exist — a dangling name is allowed by design and reported via the availability status.",
     tags: ["config"],
-    requestBody: DefaultProviderSchema,
+    requestBody: DefaultProviderSelectionSchema,
     responseBody: defaultProviderStatusSchema,
   },
 ];
