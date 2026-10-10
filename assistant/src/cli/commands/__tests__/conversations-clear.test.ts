@@ -1,43 +1,67 @@
-import * as nodeFs from "node:fs";
+/**
+ * Tests for `conversations clear` — destructive confirmation flow plus the
+ * real clear.
+ *
+ * Runs the real CLI command against a real AssistantIpcServer on this
+ * process's own socket (the preload pins ASSISTANT_IPC_SOCKET_DIR to the
+ * per-process tmp root): the command's real `cliIpcCall` connects, the
+ * `conversations_clear_cli` route really clears the workspace DB, and the
+ * assertions read the store back. The readline mock only simulates the user
+ * typing (an I/O harness, not a fake of the code under test).
+ */
+
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { Command } from "commander";
 
-let lastIpcCall: { method: string; params?: Record<string, unknown> } | null =
-  null;
-const loggerCalls: { level: string; msg: string }[] = [];
+import { AssistantIpcServer } from "../../../ipc/assistant-server.js";
+import {
+  createConversation,
+  getConversation,
+} from "../../../persistence/conversation-crud.js";
+import { initializeDb } from "../../../persistence/db-init.js";
+
+// The IPC route writes through the real store — run the migration chain once
+// so the workspace DB has its schema before the first command runs.
+await initializeDb();
+
+const { registerConversationsCommand } = await import("../conversations.js");
+
+let server: AssistantIpcServer | null = null;
+
+async function startServer(): Promise<void> {
+  server = new AssistantIpcServer({ watchdogIntervalMs: 0 });
+  await server.start();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+afterEach(() => {
+  server?.stop();
+  server = null;
+});
+
+/** Seed real conversations and return their ids. */
+async function seedConversations(n: number): Promise<string[]> {
+  const ids: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const row = await createConversation({ title: `Clear me ${i}` });
+    ids.push(row.id);
+  }
+  return ids;
+}
+
+// The CLI's "Cleared N" line counts ACTIVE daemon sessions (in-memory
+// conversation objects), not DB rows; a workspace with rows but no active
+// sessions reports "Cleared 0 conversations" while the route still really
+// wipes the DB. Spinning active sessions requires a resolved default LLM
+// provider (the providers/registry family, mocked elsewhere), so these tests
+// pin the row-level contract: rows exist before, are gone after.
+
 // null simulates EOF (Ctrl+D): readline emits close without answering.
 let promptAnswer: string | null = "";
 let prompted = false;
+let stdoutOutput = "";
 let stderrOutput = "";
-
-mock.module("../../../ipc/cli-client.js", () => ({
-  cliIpcCall: async (method: string, params?: Record<string, unknown>) => {
-    lastIpcCall = { method, params };
-    return { ok: true, result: { cleared: 3 } };
-  },
-  exitCodeFromIpcResult: () => 1,
-  exitFromIpcResult: () => {
-    process.exitCode = 1;
-  },
-}));
-
-const fakeLogger = {
-  info: (m: unknown) => loggerCalls.push({ level: "info", msg: String(m) }),
-  warn: () => {},
-  error: (m: unknown) => loggerCalls.push({ level: "error", msg: String(m) }),
-  debug: () => {},
-};
-
-mock.module("../../../util/logger.js", () => ({
-  getLogger: () => fakeLogger,
-  getCliLogger: () => fakeLogger,
-  initLogger: () => {},
-  truncateForLog: (v: string) => v,
-  pruneOldLogFiles: () => 0,
-  LOG_FILE_PATTERN: /^assistant-(\d{4}-\d{2}-\d{2})\.log$/,
-  getCurrentLogFilePath: () => "/tmp/test-assistant.log",
-}));
 
 function fakeInterface() {
   let onClose = () => {};
@@ -63,24 +87,34 @@ mock.module("node:readline", () => ({
   createInterface: fakeInterface,
 }));
 
-// node:fs must stay fully functional for conversations.js's heavy import graph.
-const realFs = { ...nodeFs };
-mock.module("node:fs", () => ({ ...realFs }));
-
-const { registerConversationsCommand } = await import("../conversations.js");
-
 async function runClear(args: string[]): Promise<number> {
   const program = new Command();
   program.exitOverride();
   program.configureOutput({ writeErr: () => {}, writeOut: () => {} });
   registerConversationsCommand(program);
-  await program.parseAsync([
-    "node",
-    "assistant",
-    "conversations",
-    "clear",
-    ...args,
-  ]);
+  const origOut = process.stdout.write;
+  const capture =
+    (sink: string[]) =>
+    (chunk: string | Uint8Array): boolean => {
+      sink.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+  const outSink: string[] = [];
+  process.stdout.write = capture(outSink) as typeof process.stdout.write;
+  try {
+    await program.parseAsync([
+      "node",
+      "assistant",
+      "conversations",
+      "clear",
+      ...args,
+    ]);
+  } finally {
+    process.stdout.write = origOut;
+  }
+  stdoutOutput = outSink.join("");
   const code = Number(process.exitCode ?? 0);
   process.exitCode = 0;
   return code;
@@ -90,9 +124,8 @@ const savedIsTTY = process.stdin.isTTY;
 const realStderrWrite = process.stderr.write.bind(process.stderr);
 
 beforeEach(() => {
-  lastIpcCall = null;
-  loggerCalls.length = 0;
   prompted = false;
+  stdoutOutput = "";
   stderrOutput = "";
   process.exitCode = 0;
   process.stderr.write = ((chunk: string) => {
@@ -108,49 +141,61 @@ afterEach(() => {
 
 describe("conversations clear", () => {
   test("interactive: Enter cancels without clearing", async () => {
+    await startServer();
+    const ids = await seedConversations(2);
     process.stdin.isTTY = true;
     promptAnswer = "";
     expect(await runClear([])).toBe(0);
     expect(prompted).toBe(true);
-    expect(lastIpcCall).toBeNull();
-    expect(loggerCalls.some((c) => c.msg === "Cancelled")).toBe(true);
+    expect(stdoutOutput).toContain("Cancelled");
+    // Nothing was cleared.
+    for (const id of ids) {
+      expect(await getConversation(id)).not.toBeNull();
+    }
   });
 
-  test("interactive: y clears with the destructive-confirmation header", async () => {
+  test("interactive: y clears every conversation for real", async () => {
+    await startServer();
+    const ids = await seedConversations(3);
     process.stdin.isTTY = true;
     promptAnswer = "y";
     expect(await runClear([])).toBe(0);
-    expect(lastIpcCall).toEqual({
-      method: "conversations_clear_cli",
-      params: {
-        headers: { "x-confirm-destructive": "clear-all-conversations" },
-      },
-    });
+    // The route accepted the destructive confirmation and really cleared.
+    expect(stdoutOutput).toContain("Cleared 0 conversations");
+    for (const id of ids) {
+      expect(await getConversation(id)).toBeNull();
+    }
   });
 
   test("non-TTY without --force fails fast naming the flag", async () => {
+    await startServer();
+    const ids = await seedConversations(1);
     process.stdin.isTTY = false;
     expect(await runClear([])).toBe(1);
     expect(prompted).toBe(false);
-    expect(lastIpcCall).toBeNull();
     expect(stderrOutput).toContain("--force");
+    expect(await getConversation(ids[0]!)).not.toBeNull();
   });
 
   test("interactive: EOF cancels instead of hanging", async () => {
+    await startServer();
+    const ids = await seedConversations(1);
     process.stdin.isTTY = true;
     promptAnswer = null;
     expect(await runClear([])).toBe(0);
-    expect(lastIpcCall).toBeNull();
-    expect(loggerCalls.some((c) => c.msg === "Cancelled")).toBe(true);
+    expect(stdoutOutput).toContain("Cancelled");
+    expect(await getConversation(ids[0]!)).not.toBeNull();
   });
 
   test("non-TTY with --force clears without prompting", async () => {
+    await startServer();
+    const ids = await seedConversations(3);
     process.stdin.isTTY = false;
     expect(await runClear(["--force"])).toBe(0);
     expect(prompted).toBe(false);
-    expect(lastIpcCall?.params).toEqual({
-      headers: { "x-confirm-destructive": "clear-all-conversations" },
-    });
-    expect(loggerCalls.some((c) => c.msg.includes("Cleared 3"))).toBe(true);
+    expect(stdoutOutput).toContain("Cleared 0 conversations");
+    for (const id of ids) {
+      expect(await getConversation(id)).toBeNull();
+    }
   });
 });

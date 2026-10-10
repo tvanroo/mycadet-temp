@@ -1,69 +1,64 @@
 /**
  * Tests for `assistant conversations search`.
  *
- * Validates IPC plumbing onto `conversations_search`, human vs `--json`
- * output, empty-result copy, and validation of the search term / --limit.
+ * Runs the real CLI command against a real AssistantIpcServer on this
+ * process's own socket (the preload pins ASSISTANT_IPC_SOCKET_DIR to the
+ * per-process tmp root): the command's real `cliIpcCall` connects, the
+ * `conversations_search` route queries the real workspace DB, and assertions
+ * read results back.
+ *
+ * Content matching rides the Qdrant-backed lexical index (external service —
+ * it fails soft to title-only matching in tests), so these tests seed
+ * title matches, the deterministic arm. The one failure-path test keeps the
+ * documented process-boundary shim for `exitFromIpcResult` (the real one
+ * ends the process; spreading the real module and replacing only that
+ * function keeps the whole IPC stack real).
  */
 
-import * as nodeFs from "node:fs";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { Command } from "commander";
 
-let lastIpcCall: { method: string; params?: Record<string, unknown> } | null =
-  null;
+import { AssistantIpcServer } from "../../../ipc/assistant-server.js";
+import * as realCliClient from "../../../ipc/cli-client.js";
+import { createConversation } from "../../../persistence/conversation-crud.js";
+import { initializeDb } from "../../../persistence/db-init.js";
+import { reportIpcFailureWithoutExiting } from "../../__tests__/run-assistant-command.js";
 
-let mockIpcResult: {
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-  statusCode?: number;
-} = { ok: true, result: { query: "flux", results: [] } };
-
+// Process-boundary shim: the real `exitFromIpcResult` calls process.exit,
+// which would kill the test runner. Everything else in the module — the real
+// `cliIpcCall` included — stays real.
 mock.module("../../../ipc/cli-client.js", () => ({
-  cliIpcCall: async (method: string, params?: Record<string, unknown>) => {
-    lastIpcCall = { method, params };
-    return mockIpcResult;
-  },
-  exitCodeFromIpcResult: (r: { statusCode?: number }) =>
-    r.statusCode === undefined
-      ? 10
-      : r.statusCode >= 500
-        ? 3
-        : r.statusCode >= 400
-          ? 2
-          : 1,
-  exitFromIpcResult: () => {
-    process.exitCode = 1;
+  ...realCliClient,
+  exitFromIpcResult: (r: { error?: string; statusCode?: number }) => {
+    reportIpcFailureWithoutExiting(r);
   },
 }));
 
-const realFs = { ...nodeFs };
-mock.module("node:fs", () => ({ ...realFs }));
+// The IPC route queries the real store — run the migration chain once so the
+// workspace DB has its schema before the first command runs.
+await initializeDb();
 
 const { registerConversationsCommand } = await import("../conversations.js");
 
-const THREE_HOURS_AGO = Date.now() - 3 * 60 * 60 * 1000;
+let server: AssistantIpcServer | null = null;
 
-const matchingResult = {
-  conversationId: "conv-xyz",
-  conversationTitle: "Quarterly metrics",
-  conversationUpdatedAt: THREE_HOURS_AGO,
-  matchingMessages: [
-    {
-      messageId: "msg-1",
-      role: "user",
-      excerpt: "let's review the flux capacitor numbers",
-      createdAt: THREE_HOURS_AGO,
-    },
-    {
-      messageId: "msg-2",
-      role: "assistant",
-      excerpt: "the Q3 flux capacitor spend is on track",
-      createdAt: THREE_HOURS_AGO,
-    },
-  ],
-};
+// The workspace DB persists across tests in this file-process, so every
+// search seeds titles around a term unique to its own test.
+function uniqueTerm(): string {
+  return `flux-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+async function startServer(): Promise<void> {
+  server = new AssistantIpcServer({ watchdogIntervalMs: 0 });
+  await server.start();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+afterEach(() => {
+  server?.stop();
+  server = null;
+});
 
 async function runSearch(
   args: string[],
@@ -124,9 +119,7 @@ async function runSearch(
 }
 
 beforeEach(() => {
-  lastIpcCall = null;
   process.exitCode = 0;
-  mockIpcResult = { ok: true, result: { query: "flux", results: [] } };
 });
 
 afterEach(() => {
@@ -134,111 +127,83 @@ afterEach(() => {
 });
 
 describe("conversations search", () => {
-  test("forwards the term to conversations_search as queryParams.q", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: { query: "flux capacitor", results: [matchingResult] },
-    };
-    const { code } = await runSearch(["search", "flux capacitor"]);
+  test("finds a real conversation by title substring", async () => {
+    await startServer();
+    const term = uniqueTerm();
+    const row = await createConversation({ title: `Quarterly ${term} review` });
+    await createConversation({ title: "Unrelated planning" });
+    const { code, stdout } = await runSearch(["search", term]);
     expect(code).toBe(0);
-    expect(lastIpcCall?.method).toBe("conversations_search");
-    expect(lastIpcCall?.params).toEqual({
-      queryParams: { q: "flux capacitor" },
+    expect(stdout).toContain(row.id);
+    expect(stdout).toContain(`Quarterly ${term} review`);
+    expect(stdout).not.toContain("Unrelated planning");
+  });
+
+  test("passes --limit through to the real query", async () => {
+    await startServer();
+    const term = uniqueTerm();
+    const rows = [
+      await createConversation({ title: `${term} one` }),
+      await createConversation({ title: `${term} two` }),
+      await createConversation({ title: `${term} three` }),
+    ];
+    const { code, stdout } = await runSearch(["search", term, "--limit", "2"]);
+    expect(code).toBe(0);
+    // Exactly two of the three seeded rows came back.
+    const listed = rows.filter((r) => stdout.includes(r.id));
+    expect(listed).toHaveLength(2);
+  });
+
+  test("prints a no-match line when the DB has no matches", async () => {
+    await startServer();
+    await createConversation({ title: "Unrelated planning" });
+    const term = uniqueTerm();
+    const { code, stdout } = await runSearch(["search", term]);
+    expect(code).toBe(0);
+    expect(stdout).toBe(`No conversations matched "${term}"\n`);
+  });
+
+  test("--json emits the real result payload", async () => {
+    await startServer();
+    const term = uniqueTerm();
+    const row = await createConversation({ title: `${term} json` });
+    const { code, stdout } = await runSearch(["search", term, "--json"]);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout) as {
+      query: string;
+      results: Array<{
+        conversationId: string;
+        conversationTitle: string | null;
+      }>;
+    };
+    expect(parsed.query).toBe(term);
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]).toMatchObject({
+      conversationId: row.id,
+      conversationTitle: `${term} json`,
     });
   });
 
-  test("passes --limit as a query param string", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: { query: "flux", results: [] },
-    };
-    const { code } = await runSearch(["search", "flux", "--limit", "5"]);
-    expect(code).toBe(0);
-    expect(lastIpcCall?.params).toEqual({
-      queryParams: { q: "flux", limit: "5" },
-    });
-  });
-
-  test("prints conversation rows and excerpts in human mode", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: { query: "flux", results: [matchingResult] },
-    };
-    const { code, stdout } = await runSearch(["search", "flux"]);
-    expect(code).toBe(0);
-    expect(stdout).toContain("conv-xyz");
-    expect(stdout).toContain("Quarterly metrics");
-    expect(stdout).toContain("3h ago");
-    expect(stdout).toContain("user  let's review the flux capacitor numbers");
-    expect(stdout).toContain(
-      "assistant  the Q3 flux capacitor spend is on track",
-    );
-  });
-
-  test("prints Untitled when the conversation title is null", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: {
-        query: "flux",
-        results: [
-          {
-            ...matchingResult,
-            conversationTitle: null,
-            matchingMessages: [],
-          },
-        ],
-      },
-    };
-    const { code, stdout } = await runSearch(["search", "flux"]);
-    expect(code).toBe(0);
-    expect(stdout).toContain("Untitled");
-  });
-
-  test("prints a no-match line when the daemon returns no results", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: { query: "no-such-term", results: [] },
-    };
-    const { code, stdout } = await runSearch(["search", "no-such-term"]);
-    expect(code).toBe(0);
-    expect(lastIpcCall?.method).toBe("conversations_search");
-    expect(stdout).toBe('No conversations matched "no-such-term"\n');
-  });
-
-  test("--json emits the daemon payload", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: { query: "flux", results: [matchingResult] },
-    };
-    const { code, stdout } = await runSearch(["search", "flux", "--json"]);
-    expect(code).toBe(0);
-    expect(JSON.parse(stdout)).toEqual({
-      query: "flux",
-      results: [matchingResult],
-    });
-  });
-
-  test("--json reports IPC failure as { ok: false } and exits non-zero", async () => {
-    mockIpcResult = { ok: false, error: "assistant not running" };
+  test("--json reports a real connect failure as { ok: false } and exits non-zero", async () => {
+    // No server started: the real client surfaces the real connect error.
     const { code, stdout } = await runSearch(["search", "flux", "--json"]);
     expect(code).toBe(10);
-    expect(JSON.parse(stdout)).toEqual({
-      ok: false,
-      error: "assistant not running",
-    });
+    const parsed = JSON.parse(stdout) as { ok: boolean; error?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain("Could not connect to the assistant at");
   });
 
   test("rejects a whitespace-only term before IPC", async () => {
+    await startServer();
     const { code, stderr } = await runSearch(["search", "   "]);
     expect(code).toBe(1);
-    expect(lastIpcCall).toBeNull();
     expect(stderr).toContain("Search term must be a non-empty string");
   });
 
   test("--json rejects a whitespace-only term as { ok: false }", async () => {
+    await startServer();
     const { code, stdout } = await runSearch(["search", "   ", "--json"]);
     expect(code).toBe(1);
-    expect(lastIpcCall).toBeNull();
     expect(JSON.parse(stdout)).toMatchObject({
       ok: false,
       error: expect.stringContaining("Search term must be a non-empty string"),
@@ -246,6 +211,7 @@ describe("conversations search", () => {
   });
 
   test("rejects a non-numeric --limit before IPC", async () => {
+    await startServer();
     const { code, stderr } = await runSearch([
       "search",
       "flux",
@@ -253,7 +219,6 @@ describe("conversations search", () => {
       "all",
     ]);
     expect(code).toBe(1);
-    expect(lastIpcCall).toBeNull();
     expect(stderr).toContain("Invalid --limit value");
   });
 

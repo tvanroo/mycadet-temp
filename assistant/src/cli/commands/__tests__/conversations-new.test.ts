@@ -1,103 +1,98 @@
 /**
  * Tests for `conversations new --json` — the flag emits a machine-readable
- * result (incl. the new id) so callers can capture it without scraping the log.
+ * result (incl. the new id) so callers can capture it without scraping the
+ * log.
+ *
+ * Runs the real CLI command against a real AssistantIpcServer on this
+ * process's own socket (the preload pins ASSISTANT_IPC_SOCKET_DIR to the
+ * per-process tmp root): the command's real `cliIpcCall` connects over the
+ * socket, the `conversation_create_cli` route creates a real conversation in
+ * the workspace DB, and assertions read the store back.
  */
 
-import * as nodeFs from "node:fs";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { Command } from "commander";
 
-let lastIpcCall: { method: string; params?: Record<string, unknown> } | null =
-  null;
-const loggerCalls: { level: string; msg: string }[] = [];
+import { AssistantIpcServer } from "../../../ipc/assistant-server.js";
+import { getConversation } from "../../../persistence/conversation-crud.js";
+import { initializeDb } from "../../../persistence/db-init.js";
 
-// Reassigned per-test so a single mock can stand in for success and failure.
-let mockIpcResult: { ok: boolean; result?: unknown; error?: string } = {
-  ok: true,
-  result: {
-    id: "conv-new-1",
-    title: "GitHub watcher",
-    conversationKey: "key-1",
-    messagesInserted: 0,
-  },
-};
-
-mock.module("../../../ipc/cli-client.js", () => ({
-  cliIpcCall: async (method: string, params?: Record<string, unknown>) => {
-    lastIpcCall = { method, params };
-    return mockIpcResult;
-  },
-  exitCodeFromIpcResult: (r: { statusCode?: number }) =>
-    r.statusCode === undefined
-      ? 10
-      : r.statusCode >= 500
-        ? 3
-        : r.statusCode >= 400
-          ? 2
-          : 1,
-  exitFromIpcResult: (r: { error?: string }) => {
-    process.exitCode = 1;
-    loggerCalls.push({ level: "error", msg: r.error ?? "Unknown error" });
-  },
-}));
-
-const fakeLogger = {
-  info: (m: unknown) => loggerCalls.push({ level: "info", msg: String(m) }),
-  warn: () => {},
-  error: (m: unknown) => loggerCalls.push({ level: "error", msg: String(m) }),
-  debug: () => {},
-};
-
-mock.module("../../../util/logger.js", () => ({
-  getLogger: () => fakeLogger,
-  getCliLogger: () => fakeLogger,
-  initLogger: () => {},
-  truncateForLog: (v: string) => v,
-  pruneOldLogFiles: () => 0,
-  LOG_FILE_PATTERN: /^assistant-(\d{4}-\d{2}-\d{2})\.log$/,
-  getCurrentLogFilePath: () => "/tmp/test-assistant.log",
-}));
-
-// node:fs must stay fully functional for conversations.js's heavy import graph
-// — a partial mock deadlocks it — so spread the real module.
-const realFs = { ...nodeFs };
-mock.module("node:fs", () => ({ ...realFs }));
+// The IPC route writes through the real store — run the migration chain once
+// so the workspace DB has its schema before the first command runs.
+await initializeDb();
 
 const { registerConversationsCommand } = await import("../conversations.js");
 
-async function runNew(args: string[]): Promise<number> {
+let server: AssistantIpcServer | null = null;
+
+/** Boot a real IPC server on this process's socket for the calling test. */
+async function startServer(): Promise<void> {
+  server = new AssistantIpcServer({ watchdogIntervalMs: 0 });
+  await server.start();
+  // Let the listener settle before the client connects.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+afterEach(() => {
+  server?.stop();
+  server = null;
+});
+
+interface RunResult {
+  code: number;
+  out: string;
+  err: string;
+}
+
+async function runNew(args: string[]): Promise<RunResult> {
   const program = new Command();
   program.exitOverride();
   program.configureOutput({ writeErr: () => {}, writeOut: () => {} });
   registerConversationsCommand(program);
+  // The real CLI logger writes plain message text to stdout (info) and
+  // stderr (error) — capture the streams the commander plumbing leaves alone.
+  const out: string[] = [];
+  const err: string[] = [];
+  const origOut = process.stdout.write;
+  const origErr = process.stderr.write;
+  const capture =
+    (sink: string[]) =>
+    (chunk: string | Uint8Array): boolean => {
+      sink.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
+      return true;
+    };
+  process.stdout.write = capture(out) as typeof process.stdout.write;
+  process.stderr.write = capture(err) as typeof process.stderr.write;
   try {
     await program.parseAsync(["node", "assistant", "conversations", ...args]);
   } catch {
-    if (process.exitCode === 0 || process.exitCode === undefined) {
-      process.exitCode = 1;
-    }
+    // commander's exitOverride throws on exit; the command's own
+    // process.exitCode carries the status.
+  } finally {
+    process.stdout.write = origOut;
+    process.stderr.write = origErr;
   }
   const code = Number(process.exitCode ?? 0);
   process.exitCode = 0;
-  return code;
+  return { code, out: out.join(""), err: err.join("") };
 }
 
-/** Parse the last info line as JSON (the `--json` path emits one JSON line). */
-function jsonOutput(): Record<string, unknown> {
-  const info = loggerCalls.filter((c) => c.level === "info");
-  const last = info[info.length - 1];
+/** Parse the last stdout line as JSON (the `--json` path emits one JSON line). */
+function jsonOutput(r: RunResult): Record<string, unknown> {
+  const lines = r.out.trim().split("\n");
+  const last = lines[lines.length - 1];
   if (!last) {
-    throw new Error("no info output captured");
+    throw new Error("no stdout output captured");
   }
-  return JSON.parse(last.msg) as Record<string, unknown>;
+  return JSON.parse(last) as Record<string, unknown>;
 }
 
 let savedRunId: string | undefined;
 
 beforeEach(() => {
-  lastIpcCall = null;
-  loggerCalls.length = 0;
   process.exitCode = 0;
   // Clear __SCHEDULE_RUN_ID so it can't leak conversationType into the body.
   savedRunId = process.env.__SCHEDULE_RUN_ID;
@@ -106,81 +101,75 @@ beforeEach(() => {
 
 describe("conversations new --json", () => {
   test("--json emits a parseable result with the new conversation id", async () => {
-    mockIpcResult = {
+    await startServer();
+    const r = await runNew(["new", "GitHub watcher", "--json"]);
+    expect(r.code).toBe(0);
+    const parsed = jsonOutput(r);
+    expect(parsed).toMatchObject({
       ok: true,
-      result: {
-        id: "conv-new-1",
-        title: "GitHub watcher",
-        conversationKey: "key-1",
-        messagesInserted: 0,
-      },
-    };
-    const code = await runNew(["new", "GitHub watcher", "--json"]);
-    expect(code).toBe(0);
-    expect(lastIpcCall?.method).toBe("conversation_create_cli");
-    expect(jsonOutput()).toMatchObject({
-      ok: true,
-      id: "conv-new-1",
-      conversationKey: "key-1",
+      title: "GitHub watcher",
+      messagesInserted: 0,
     });
+    expect(typeof parsed.id).toBe("string");
+    expect(typeof parsed.conversationKey).toBe("string");
+    // The conversation really exists in the workspace DB.
+    const row = await getConversation(parsed.id as string);
+    expect(row?.title).toBe("GitHub watcher");
   });
 
   test("without --json, prints the human line and not JSON", async () => {
-    mockIpcResult = {
-      ok: true,
-      result: {
-        id: "conv-new-2",
-        title: "Notes",
-        conversationKey: "key-2",
-        messagesInserted: 0,
-      },
-    };
-    const code = await runNew(["new", "Notes"]);
-    expect(code).toBe(0);
-    const info = loggerCalls
-      .filter((c) => c.level === "info")
-      .map((c) => c.msg);
-    expect(
-      info.some((m) => m.includes("Created conversation: Notes (conv-new-2)")),
-    ).toBe(true);
-    expect(() => JSON.parse(info[info.length - 1]!)).toThrow();
+    await startServer();
+    const r = await runNew(["new", "Notes"]);
+    expect(r.code).toBe(0);
+    const lines = r.out.trim().split("\n");
+    const last = lines[lines.length - 1] ?? "";
+    expect(last).toMatch(
+      /^Created conversation: Notes \(\S.+\), conversation key: \S+/,
+    );
+    // The parenthesized id in the human line is the real row's id.
+    const id = last.match(/\(([^)]+)\)/)?.[1] ?? "";
+    const row = await getConversation(id);
+    expect(row?.title).toBe("Notes");
+    expect(() => JSON.parse(last)).toThrow();
   });
 
-  test("--json reports failure as { ok: false } and exits non-zero", async () => {
-    mockIpcResult = { ok: false, error: "daemon not running" };
-    const code = await runNew(["new", "X", "--json"]);
-    expect(code).toBe(1);
-    expect(jsonOutput()).toEqual({ ok: false, error: "daemon not running" });
+  test("--json reports a real connect failure as { ok: false } and exits non-zero", async () => {
+    // No server started: the real client must surface the real connect error.
+    const r = await runNew(["new", "X", "--json"]);
+    expect(r.code).toBe(1);
+    const parsed = jsonOutput(r);
+    expect(parsed.ok).toBe(false);
+    expect(String(parsed.error)).toContain(
+      "Could not connect to the assistant at",
+    );
   });
 
   test("--json reports a seed-file error as { ok: false } before any IPC", async () => {
-    const code = await runNew([
+    await startServer();
+    const r = await runNew([
       "new",
       "X",
       "--content-file",
       "/no/such/seed-file.json",
       "--json",
     ]);
-    expect(code).toBe(1);
-    expect(lastIpcCall).toBeNull(); // validation fails before any IPC call
-    expect(jsonOutput()).toMatchObject({ ok: false });
+    expect(r.code).toBe(1);
+    const parsed = jsonOutput(r);
+    expect(parsed).toMatchObject({ ok: false });
+    // Validation fails client-side: the error names the seed file, not IPC.
+    expect(String(parsed.error)).toContain("seed-file.json");
   });
 
   test("under a script-mode schedule, creates the conversation as scheduled", async () => {
     process.env.__SCHEDULE_RUN_ID = "run-9";
-    mockIpcResult = {
-      ok: true,
-      result: {
-        id: "conv-new-3",
-        title: "GitHub watcher",
-        conversationKey: "key-3",
-        messagesInserted: 0,
-      },
-    };
-    await runNew(["new", "GitHub watcher", "--json"]);
-    const body = (lastIpcCall?.params as { body?: Record<string, unknown> })
-      ?.body;
-    expect(body?.conversationType).toBe("scheduled");
+    await startServer();
+    const r = await runNew(["new", "GitHub watcher", "--json"]);
+    expect(r.code).toBe(0);
+    const parsed = jsonOutput(r);
+    expect(parsed.ok).toBe(true);
+    // The scheduled type persisted on the real row.
+    const row = await getConversation(parsed.id as string);
+    expect(row?.conversationType).toBe("scheduled");
   });
 });
 

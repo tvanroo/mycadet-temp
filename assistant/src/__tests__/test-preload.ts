@@ -54,6 +54,16 @@ const savedCesCredentialUrl = process.env.CES_CREDENTIAL_URL;
 delete process.env.IS_CONTAINERIZED;
 delete process.env.CES_CREDENTIAL_URL;
 
+// Pin the assistant CLI IPC socket to this process's tmp root. The container
+// env exports a FIXED `ASSISTANT_IPC_SOCKET_DIR` (/run/assistant-ipc), which
+// would make every test file-process share one socket path — colliding with
+// each other and, on dev containers, with a live daemon (a probe-unlink
+// against a live listener orphans it). Pointing the override at tmpRoot gives
+// each file-process its own socket; suites booting a real AssistantIpcServer
+// and the real `cliIpcCall` resolve through the same override and agree.
+const savedAssistantIpcSocketDir = process.env.ASSISTANT_IPC_SOCKET_DIR;
+process.env.ASSISTANT_IPC_SOCKET_DIR = tmpRoot;
+
 // A test runs daemon code in-process, so it acts as the main daemon for the
 // event hub's publish routing (a non-daemon forwards publishes over IPC to a
 // daemon that isn't there). Default the shared process-role slot to true; a
@@ -75,6 +85,11 @@ afterAll(() => {
   process.exitCode = 0;
   delete process.env.CADET_WORKSPACE_DIR;
   delete process.env.CADET_PLATFORM_URL;
+  if (savedAssistantIpcSocketDir !== undefined) {
+    process.env.ASSISTANT_IPC_SOCKET_DIR = savedAssistantIpcSocketDir;
+  } else {
+    delete process.env.ASSISTANT_IPC_SOCKET_DIR;
+  }
   if (savedIsContainerized !== undefined) {
     process.env.IS_CONTAINERIZED = savedIsContainerized;
   }
