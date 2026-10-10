@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EventEmitter } from "node:events";
+import { Socket } from "node:net";
 
 import {
   ensureProviderApiKey,
@@ -45,26 +45,16 @@ function makeFetch(responses: Response[]): {
   return { calls, fetchImpl };
 }
 
-class FakePromptInput extends EventEmitter {
+class FakePromptInput extends Socket {
   isTTY = true;
   isRaw = false;
-  private paused = false;
   pauseCount = 0;
   rawModes: boolean[] = [];
   events: string[] = [];
 
-  isPaused(): boolean {
-    return this.paused;
-  }
-
-  resume(): this {
-    this.paused = false;
-    return this;
-  }
-
-  pause(): this {
-    this.paused = true;
+  override pause(): this {
     this.pauseCount += 1;
+    super.pause();
     return this;
   }
 
@@ -229,18 +219,16 @@ describe("provider secret helpers", () => {
 
   test("pauses prompt input after reading a secret", async () => {
     const input = new FakePromptInput();
-    let outputText = "";
-    const output = {
-      write: (text: string) => {
-        input.events.push(`write:${text}`);
-        outputText += text;
-        return true;
-      },
+    const output = new FakePromptOutput();
+    output.write = (text: string) => {
+      input.events.push(`write:${text}`);
+      output.text += text;
+      return true;
     };
 
     const resultPromise = promptSecret("Enter key: ", {
-      input: input,
-      output: output,
+      input,
+      output,
     });
     input.emit("data", Buffer.from("test-provider-key\n"));
 
@@ -250,7 +238,7 @@ describe("provider secret helpers", () => {
     expect(input.rawModes).toEqual([true, false]);
     expect(input.events[0]).toBe("raw:true");
     expect(input.events[1]).toBe("write:Enter key: ");
-    expect(outputText).toBe("Enter key: \n");
+    expect(output.text).toBe("Enter key: \n");
   });
 
   test("refuses to read a secret when hidden input is unavailable", async () => {
@@ -259,7 +247,7 @@ describe("provider secret helpers", () => {
 
     await expect(
       promptSecret("Enter key: ", {
-        input: input,
+        input,
       }),
     ).rejects.toThrow("requires an interactive terminal");
     expect(input.listenerCount("data")).toBe(0);
@@ -267,16 +255,15 @@ describe("provider secret helpers", () => {
 
   test("restores terminal mode when the prompt cannot be written", async () => {
     const input = new FakePromptInput();
-    const output = {
-      write: () => {
-        throw new Error("output unavailable");
-      },
+    const output = new FakePromptOutput();
+    output.write = () => {
+      throw new Error("output unavailable");
     };
 
     await expect(
       promptSecret("Enter key: ", {
-        input: input,
-        output: output,
+        input,
+        output,
       }),
     ).rejects.toThrow("output unavailable");
     expect(input.rawModes).toEqual([true, false]);
@@ -325,14 +312,52 @@ describe("provider secret helpers", () => {
   });
 });
 
-function fakeOutput(): { write: (text: string) => boolean; text: string } {
-  const state = { write: (_text: string) => true, text: "" };
-  state.write = (text: string) => {
-    state.text += text;
+class FakePromptOutput extends Socket {
+  isTTY = true;
+  columns = 80;
+  rows = 24;
+  text = "";
+
+  override write(text: string): boolean {
+    this.text += text;
     return true;
-  };
-  return state;
+  }
+
+  clearLine(_dir?: -1 | 0 | 1, _callback?: () => void): boolean {
+    return true;
+  }
+
+  clearScreenDown(_callback?: () => void): boolean {
+    return true;
+  }
+
+  cursorTo(_x: number, _y?: number, _callback?: () => void): boolean;
+  cursorTo(_x: number, _callback: () => void): boolean;
+  cursorTo(): boolean {
+    return true;
+  }
+
+  moveCursor(_dx: number, _dy: number, _callback?: () => void): boolean {
+    return true;
+  }
+
+  getColorDepth(_env?: object): number {
+    return 8;
+  }
+
+  hasColors(_count?: number): boolean;
+  hasColors(_env?: object): boolean;
+  hasColors(_count: number, _env?: object): boolean;
+  hasColors(): boolean {
+    return true;
+  }
+
+  getWindowSize(): [number, number] {
+    return [this.columns, this.rows];
+  }
 }
+
+const fakeOutput = (): FakePromptOutput => new FakePromptOutput();
 
 describe("promptLine", () => {
   test("resolves on newline", async () => {
@@ -340,8 +365,8 @@ describe("promptLine", () => {
     const output = fakeOutput();
 
     const resultPromise = promptLine("Pick one: ", {
-      input: input,
-      output: output,
+      input,
+      output,
     });
     input.emit("data", Buffer.from("2\n"));
 
@@ -355,8 +380,8 @@ describe("promptLine", () => {
     const output = fakeOutput();
 
     const resultPromise = promptLine("Pick one: ", {
-      input: input,
-      output: output,
+      input,
+      output,
     });
     input.emit("data", Buffer.from("1"));
     input.emit("data", Buffer.from("0"));
@@ -371,8 +396,8 @@ describe("promptLine", () => {
     const output = fakeOutput();
 
     const resultPromise = promptLine("Pick one: ", {
-      input: input,
-      output: output,
+      input,
+      output,
     });
     input.emit("end");
 
@@ -388,8 +413,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices,
     });
     input.emit("data", Buffer.from("2\n"));
@@ -404,8 +429,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices,
     });
     input.emit("data", Buffer.from("nope\n"));
@@ -423,8 +448,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices,
     });
     // A paste can deliver several lines in one "data" event, all before the
@@ -439,8 +464,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices,
     });
     input.emit("data", Buffer.from("\n"));
@@ -453,8 +478,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices,
     });
     input.emit("end");
@@ -467,8 +492,8 @@ describe("promptProviderChoice", () => {
     const output = fakeOutput();
 
     const resultPromise = promptProviderChoice({
-      input: input,
-      output: output,
+      input,
+      output,
       choices: ["anthropic", "openai"],
     });
     input.emit("data", Buffer.from("3\n"));

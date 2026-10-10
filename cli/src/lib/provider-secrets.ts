@@ -1,21 +1,6 @@
-import { EventEmitter } from "node:events";
 import { z } from "zod";
 
 import { LLM_PROVIDER_ENV_VAR_NAMES } from "../shared/provider-env-vars.js";
-
-/** The stdin slice the prompt helpers touch, so fakes need no casts. */
-type SecretPromptInput = EventEmitter & {
-  readonly isTTY?: boolean | undefined;
-  readonly isRaw?: boolean | undefined;
-  setRawMode(mode: boolean): void;
-  pause(): void;
-  resume(): void;
-};
-
-/** The stdout slice: prompts and newlines. */
-type SecretPromptOutput = {
-  write(text: string): void;
-};
 
 export type LlmProviderId = keyof typeof LLM_PROVIDER_ENV_VAR_NAMES;
 
@@ -58,8 +43,8 @@ export interface EnsureProviderApiKeyOptions {
   fetchImpl?: ProviderSecretFetch;
   prompt?: (prompt: string) => Promise<string>;
   stdinIsTTY?: boolean;
-  input?: SecretPromptInput;
-  output?: SecretPromptOutput;
+  input?: NodeJS.ReadStream;
+  output?: NodeJS.WriteStream;
   /** Key collected before startup, right after the provider choice. */
   precollectedKey?: string;
 }
@@ -78,8 +63,8 @@ export interface HatchProviderApiKeyOptions {
   log?: (message: string) => void;
   prompt?: (prompt: string) => Promise<string>;
   stdinIsTTY?: boolean;
-  input?: SecretPromptInput;
-  output?: SecretPromptOutput;
+  input?: NodeJS.ReadStream;
+  output?: NodeJS.WriteStream;
   /** Key collected before startup, right after the provider choice. */
   precollectedKey?: string;
 }
@@ -319,13 +304,8 @@ async function parseErrorMessage(response: Response): Promise<string> {
   }
 
   try {
-    const parsed = z
-      .object({ error: z.unknown() })
-      .safeParse(JSON.parse(text));
-    if (parsed.success) {
-      const message = extractErrorMessage(parsed.data.error);
-      if (message) return message;
-    }
+    const message = ApiErrorBodySchema.catch({}).parse(JSON.parse(text)).error;
+    if (message) return message;
   } catch {
     // Fall back to raw text below.
   }
@@ -337,20 +317,20 @@ async function parseErrorMessage(response: Response): Promise<string> {
   return response.statusText || `HTTP ${response.status}`;
 }
 
-function extractErrorMessage(error: unknown): string | null {
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error.trim();
-  }
-  if (!error || typeof error !== "object") {
-    return null;
-  }
-
-  if ("message" in error && typeof error.message === "string") {
-    return error.message.trim() || null;
-  }
-
-  return null;
-}
+/**
+ * The failure body the secrets endpoints return: `{"error": "..."}` or
+ * `{"error": {"message": "..."}}`. Anything else parses to no error, leaving
+ * the caller to fall back to the raw response text.
+ */
+const ApiErrorBodySchema = z.object({
+  error: z
+    .union([z.string(), z.object({ message: z.string() })])
+    .transform((error) =>
+      typeof error === "string" ? error.trim() : error.message.trim(),
+    )
+    .pipe(z.string().min(1))
+    .optional(),
+});
 
 export async function readGatewayApiKey(
   gatewayUrl: string,
@@ -444,8 +424,8 @@ export async function injectGatewayApiKey(
 export async function promptSecret(
   prompt: string,
   streams: {
-    input?: SecretPromptInput;
-    output?: SecretPromptOutput;
+    input?: NodeJS.ReadStream;
+    output?: NodeJS.WriteStream;
   } = {},
 ): Promise<string> {
   const input = streams.input ?? process.stdin;
@@ -527,7 +507,7 @@ export async function promptSecret(
 // pasted or piped input containing multiple lines isn't lost: any lines
 // beyond the first stay queued for the next readLine() call on the same
 // reader (see promptProviderChoice, which reuses one reader across retries).
-function createLineReader(input: SecretPromptInput): {
+function createLineReader(input: NodeJS.ReadStream): {
   readLine(): Promise<string>;
   dispose(): void;
 } {
@@ -597,8 +577,8 @@ function createLineReader(input: SecretPromptInput): {
 export async function promptLine(
   prompt: string,
   streams: {
-    input?: SecretPromptInput;
-    output?: SecretPromptOutput;
+    input?: NodeJS.ReadStream;
+    output?: NodeJS.WriteStream;
   } = {},
 ): Promise<string> {
   const input = streams.input ?? process.stdin;
@@ -615,8 +595,8 @@ export async function promptLine(
 }
 
 export interface PromptProviderChoiceOptions {
-  input?: SecretPromptInput;
-  output?: SecretPromptOutput;
+  input?: NodeJS.ReadStream;
+  output?: NodeJS.WriteStream;
   choices?: readonly LlmProviderId[];
 }
 
