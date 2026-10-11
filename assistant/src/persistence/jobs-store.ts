@@ -105,6 +105,20 @@ export const MESSAGE_LEXICAL_JOB_TYPES: MemoryJobType[] = [
   "backfill_lexical_index",
 ];
 
+/**
+ * Host-owned retention-pruning job types driven by the cleanup scheduler
+ * (`maybeEnqueueScheduledCleanupJobs`). These are DB hygiene — batched
+ * DELETEs, no embedding or LLM work — not memory features, so they stay
+ * claimable while memory is disabled (see `runMemoryJobsOnce` in the jobs
+ * worker). Gating them on the memory master switch would silently strand
+ * every retention knob.
+ */
+export const SCHEDULED_CLEANUP_JOB_TYPES: MemoryJobType[] = [
+  "prune_old_conversations",
+  "prune_old_llm_request_logs",
+  "prune_old_tool_invocations",
+];
+
 export const SLOW_LLM_JOB_TYPES: MemoryJobType[] = [
   "graph_consolidate",
   "pkb_filing",

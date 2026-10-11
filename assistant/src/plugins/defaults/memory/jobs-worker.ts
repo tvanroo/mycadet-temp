@@ -57,6 +57,7 @@ import {
   MESSAGE_LEXICAL_JOB_TYPES,
   rescheduleMemoryJob,
   resetRunningJobsToPending,
+  SCHEDULED_CLEANUP_JOB_TYPES,
   SLOW_LLM_JOB_TYPES,
 } from "../../../persistence/jobs-store.js";
 import { isJobQueueResolution, type JobHandler } from "../../types.js";
@@ -361,11 +362,16 @@ export async function runMemoryJobsOnce(
   const config = getConfig();
   // While memory is disabled the queue still drains the MESSAGE-LEXICAL job
   // types — host-owned message-search indexing that shares this queue but is
-  // not a memory feature. Every memory lane and every maintenance enqueue
-  // stays idle in that state; only the lexical types are claimable.
+  // not a memory feature. The memory lanes and the memory-maintenance
+  // enqueues stay idle in that state. Scheduled retention cleanup rides too:
+  // the prune jobs are DB hygiene (batched DELETEs, no embedding or LLM
+  // work), and gating them on the memory master switch would silently strand
+  // every retention knob — memory.enabled=false must not turn
+  // memory.cleanup.llmRequestLogRetentionMs into a no-op.
   const memoryEnabled = isMemoryEnabled(config);
-  const enableScheduledCleanup =
-    options.enableScheduledCleanup === true && memoryEnabled;
+  // `maybeEnqueueScheduledCleanupJobs` owns the `memory.cleanup.enabled`
+  // check — this flag only marks the scheduler as opted in.
+  const enableScheduledCleanup = options.enableScheduledCleanup === true;
 
   const diskPressureGate = checkDiskPressureBackgroundGate("background-work");
   if (diskPressureGate.action === "skip") {
@@ -395,14 +401,19 @@ export async function runMemoryJobsOnce(
   // jobs (and vice versa). The Qdrant circuit breaker still gates only the
   // embed lane inside `claimMemoryJobs`. With memory disabled, the slow and
   // embed lanes get no budget and the fast lane is restricted to the
-  // message-lexical types (they ride the fast lane).
+  // message-lexical types plus the scheduled-cleanup types when the cleanup
+  // scheduler is on (all of them ride the fast lane).
   const claimed = claimMemoryJobs(
     {
       slowLlm: memoryEnabled ? cfgSlow : 0,
       fast: cfgFast,
       embed: memoryEnabled ? cfgEmbed : 0,
     },
-    memoryEnabled ? undefined : MESSAGE_LEXICAL_JOB_TYPES,
+    memoryEnabled
+      ? undefined
+      : enableScheduledCleanup
+        ? [...MESSAGE_LEXICAL_JOB_TYPES, ...SCHEDULED_CLEANUP_JOB_TYPES]
+        : MESSAGE_LEXICAL_JOB_TYPES,
   );
 
   if (claimed.length === 0) {

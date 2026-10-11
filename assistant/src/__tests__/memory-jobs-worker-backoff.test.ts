@@ -18,8 +18,12 @@ import { setConfig } from "./helpers/set-config.js";
 beforeAll(async () => {
   await initializeDb();
   // Memory disabled so each idle tick finds nothing claimable in the real
-  // (empty) memory store — the backoff path is what's under test.
-  setConfig("memory", { enabled: false });
+  // (empty) memory store — the backoff path is what's under test. The
+  // cleanup scheduler is disabled too: its retention-prune jobs are exactly
+  // the kind of work this test wants absent, and with it on (the schema
+  // default) an idle tick would enqueue a prune whose next tick gets claimed,
+  // resetting the backoff mid-sequence.
+  setConfig("memory", { enabled: false, cleanup: { enabled: false } });
 });
 
 describe("memory jobs worker adaptive poll interval", () => {
