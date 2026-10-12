@@ -3,6 +3,8 @@ import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 
 import cliNoDaemonInternals from "./eslint-rules/cli-no-daemon-internals.js";
+import maxCommentLines from "./eslint-rules/max-comment-lines.js";
+import noMultiLineComments from "./eslint-rules/no-multi-line-comments.js";
 
 const eslintConfig = defineConfig([
   ...tseslint.configs.recommended,
@@ -128,6 +130,25 @@ const eslintConfig = defineConfig([
       cli: { rules: { "no-daemon-internals": cliNoDaemonInternals } },
     },
     rules: { "cli/no-daemon-internals": "error" },
+  },
+  // Comment discipline (same countdown convention as the mock.module pin):
+  // a comment must fit on one line, and a file carries at most 100 comment
+  // lines. Warning-level so the lint pin absorbs the existing count and each
+  // PR chips it down — do not add new violations.
+  {
+    files: ["src/**/*.ts"],
+    plugins: {
+      cadet: {
+        rules: {
+          "max-comment-lines": maxCommentLines,
+          "no-multi-line-comments": noMultiLineComments,
+        },
+      },
+    },
+    rules: {
+      "cadet/no-multi-line-comments": "warn",
+      "cadet/max-comment-lines": ["warn", { max: 100 }],
+    },
   },
 ]);
 

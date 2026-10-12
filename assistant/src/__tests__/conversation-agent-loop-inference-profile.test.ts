@@ -1,22 +1,4 @@
-/**
- * Verifies that `runAgentLoopImpl` reads the conversation row's
- * `inferenceProfile` column at turn start and threads it through to
- * `AgentLoop.run()` as the per-turn `overrideProfile`. Background
- * conversations intentionally skip the column so background fan-out
- * (subagents, scheduled tasks) runs on the workspace
- * defaults rather than inheriting an interactive override.
- *
- * This is the "conversation-agent-loop integration" half of the
- * inference-profiles plumbing — the resolver/provider/agent-loop layers are
- * exercised separately by their own tests.
- *
- * Zero-leak: the REAL `resolveOverrideProfile` (pure over the conversation
- * fields, which the ctx stub carries) drives every profile read, including
- * the mid-turn re-resolution between model calls. The turn runs against a
- * REAL conversation row — messages, usage, request logs, and the disk view
- * all persist to the per-process test DB — and the only fake is the ctx
- * object itself (the loop's own parameter, not a module mock).
- */
+// Zero-leak: the real resolver threads the row's inferenceProfile through to AgentLoop.run() as the per-turn overrideProfile.
 
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
@@ -27,10 +9,7 @@ import { resetPluginRegistryAndRegisterDefaults } from "../plugins/defaults/inde
 import type { Message, ToolDefinition } from "../providers/types.js";
 import { setConfig } from "./helpers/set-config.js";
 
-// Seed the workspace config for real: a named profile the tests pin as the
-// per-conversation override (complete shape — override-or-default semantics
-// skip profiles that don't carry their own provider+model) plus a short
-// turn-boundary commit wait so loop teardown stays fast.
+// Seed a real user profile to pin as the override plus a short turn-commit wait.
 setConfig("llm", {
   profiles: {
     "quality-optimized": {

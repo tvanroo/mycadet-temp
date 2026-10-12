@@ -1,23 +1,4 @@
-/**
- * Overflow recovery test suite for JARVIS-110.
- *
- * Reproduces the failure modes observed in long conversations (75+ messages)
- * where context overflow recovery fails because:
- *   1. Progress during the agent loop bypasses the convergence retry
- *   2. Token estimation significantly underestimates actual token count
- *   3. No mid-loop budget check to prevent hitting the provider limit
- *
- * Most tests are test.todo — they document expected behavior for bugs
- * to be fixed in subsequent PRs (PR 2 for tests 1–5, PR 3 for tests 6–7).
- * Tests 2, 8, 9, and 10 are now active and passing against current code.
- *
- * Zero-leak except four deliberate controls: the token estimator, overflow
- * reducer, and overflow policy are the tests' staging inputs (per-test token
- * counts and ladder behavior), and the compaction manager store hands the
- * loop the per-test ladder stub. Everything else runs for real — crud,
- * usage, request logs, and the disk view land in the per-process test DB,
- * observed via pass-through spies on the real module namespaces.
- */
+// Overflow recovery suite — zero-leak except four deliberate staging controls (estimator, reducer, policy, manager-store ladder); everything else runs real against the per-process test DB.
 import { createRequire } from "node:module";
 import {
   afterAll,
@@ -443,11 +424,7 @@ function makeCtx(
   return ctx;
 }
 
-/**
- * Build a realistic long conversation with interleaved tool calls.
- * Returns an array of messages simulating a 75+ message conversation
- * with a mix of text, tool_use, and tool_result blocks.
- */
+// Build a realistic long conversation mixing text, tool_use, and tool_result blocks.
 function buildLongConversation(messageCount: number): Message[] {
   const messages: Message[] = [];
   for (let i = 0; i < messageCount; i++) {
@@ -1205,11 +1182,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
   });
 
   // ── Test 8 ────────────────────────────────────────────────────────
-  /**
-   * Reactive recovery escalates the reduction ladder one rung per provider
-   * rejection and ends the turn with `context_too_large` once the ladder is
-   * exhausted and no auto-compress rung ran.
-   */
+  // Reactive recovery escalates one rung per rejection and ends with context_too_large once the ladder is exhausted with no auto-compress rung.
   test("ladder escalation ends the turn with context_too_large when exhausted", async () => {
     // GIVEN an estimate below the mid-loop threshold, so only the provider's
     // rejection — not the proactive gate — drives recovery
@@ -1273,11 +1246,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
   });
 
   // ── Test 8b ───────────────────────────────────────────────────────
-  /**
-   * The common case: a single ladder rung reduces enough that the re-issued
-   * provider call succeeds, so the loop continues the turn in place and ends
-   * normally with no terminal overflow exit and no client-facing error.
-   */
+  // A single rung reduces enough that the re-issued provider call succeeds and the turn continues in place.
   test("single-rung recovery succeeds and the turn continues in place", async () => {
     // GIVEN an estimate below the mid-loop threshold
     const events: AssistantEvent[] = [];
@@ -1330,11 +1299,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
   });
 
   // ── Test 9 ────────────────────────────────────────────────────────
-  /**
-   * The ladder climbs through several rungs across successive rejections and
-   * recovers once a later rung reduces the prompt enough for the provider to
-   * accept it, completing the turn without a terminal overflow exit.
-   */
+  // The ladder climbs across successive rejections and recovers once a later rung reduces enough for the provider to accept.
   test("multi-rung escalation recovers when a later rung fits", async () => {
     // GIVEN an estimate below the mid-loop threshold
     const events: AssistantEvent[] = [];
@@ -1393,13 +1358,7 @@ describe("session-agent-loop overflow recovery (JARVIS-110)", () => {
   });
 
   // ── Test 10 ───────────────────────────────────────────────────────
-  /**
-   * When the ladder applies its terminal `auto_compress_latest_turn` rung,
-   * reports exhaustion, and the provider still rejects, the loop ends the turn
-   * with `budget_yield_unrecovered`. The daemon then emits a classified
-   * `BUDGET_YIELD_UNRECOVERED` error, persists a durable assistant notice, and
-   * stamps the exit reason onto the latest llm_request_logs row.
-   */
+  // Terminal auto-compress rung + exhaustion + provider rejection ends with budget_yield_unrecovered: classified error, persisted notice, stamped exit reason.
   test("budget_yield_unrecovered: classified error emitted, persisted, and stamped", async () => {
     // GIVEN an estimate below the mid-loop threshold
     const events: AssistantEvent[] = [];
