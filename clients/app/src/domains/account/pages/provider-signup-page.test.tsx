@@ -32,19 +32,19 @@ const submitProviderSignup = mock(() =>
   Promise.resolve({ ok: true as const, data: {} }),
 );
 
-mock.module("@/lib/auth/allauth-client", () => ({
+mock.module("@web/lib/auth/allauth-client", () => ({
   getProviderSignup,
   submitProviderSignup,
   isConflict: () => false,
 }));
 
-mock.module("@/assistant/cloud-assistants-sync", () => ({
+mock.module("@web/assistant/cloud-assistants-sync", () => ({
   refreshCloudAssistantsIfStale: async () => {},
 }));
 
 const refreshSession = mock(async () => true);
 
-mock.module("@/stores/auth-store", () => ({
+mock.module("@web/stores/auth-store", () => ({
   useAuthStore: {
     use: {
       refreshSession: () => refreshSession,
@@ -68,9 +68,9 @@ mock.module("../../../components/signup-shell", () => ({
 }));
 
 const { ProviderSignupPage } =
-  await import("@/domains/account/pages/provider-signup-page");
+  await import("@app/domains/account/pages/provider-signup-page");
 const { peekSignupOnboardingFirstName, takeSignupOnboardingFirstName } =
-  await import("@/lib/auth/signup-onboarding-handoff");
+  await import("@web/lib/auth/signup-onboarding-handoff");
 
 function continueButton(): HTMLButtonElement {
   return screen.getByRole("button", { name: /continue/i });

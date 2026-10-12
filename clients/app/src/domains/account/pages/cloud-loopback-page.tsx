@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router";
 
-import { useTranslation } from "@/i18n";
-import { listAssistants } from "@/assistant/api";
-import { registerLocalCloudSession } from "@/runtime/local-mode-host";
-import { setMenuCloudSession } from "@/runtime/menu";
-import { useAuthStore } from "@/stores/auth-store";
-import { routes } from "@/utils/routes";
+import { useTranslation } from "@web/i18n";
+import { listAssistants } from "@web/assistant/api";
+import { registerLocalCloudSession } from "@web/runtime/local-mode-host";
+import { setMenuCloudSession } from "@web/runtime/menu";
+import { useAuthStore } from "@web/stores/auth-store";
+import { routes } from "@web/utils/routes";
 
 const LOOPBACK_STATE_KEY = "cadet:loopback:state";
 const LOOPBACK_RETURN_TO_KEY = "cadet:loopback:returnTo";

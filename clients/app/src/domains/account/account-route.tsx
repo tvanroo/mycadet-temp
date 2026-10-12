@@ -1,11 +1,11 @@
 import { Navigate, useSearchParams } from "react-router";
 
-import { RouteErrorBoundary } from "@/components/route-error-boundary";
-import { RootHydrateFallback } from "@/components/root-hydrate-fallback";
-import { authMiddleware } from "@/lib/auth/auth-middleware";
-import { routes } from "@/utils/routes";
+import { RouteErrorBoundary } from "@web/components/route-error-boundary";
+import { RootHydrateFallback } from "@web/components/root-hydrate-fallback";
+import { authMiddleware } from "@web/lib/auth/auth-middleware";
+import { routes } from "@web/utils/routes";
 
-import { AccountLayout } from "@/domains/account/account-layout";
+import { AccountLayout } from "@app/domains/account/account-layout";
 
 /**
  * Redirects legacy `/account/oauth/desktop-complete` to the canonical
@@ -49,7 +49,7 @@ export const accountRoute = {
               index: true,
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/account-page").then(
+                  import("@app/domains/account/pages/account-page").then(
                     (m) => m.AccountPage,
                   ),
               },
@@ -58,7 +58,7 @@ export const accountRoute = {
               path: "login",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/login-page").then(
+                  import("@app/domains/account/pages/login-page").then(
                     (m) => m.LoginPage,
                   ),
               },
@@ -67,7 +67,7 @@ export const accountRoute = {
               path: "signup",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/signup-page").then(
+                  import("@app/domains/account/pages/signup-page").then(
                     (m) => m.SignupPage,
                   ),
               },
@@ -76,7 +76,7 @@ export const accountRoute = {
               path: "provider/callback",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/provider-callback-page").then(
+                  import("@app/domains/account/pages/provider-callback-page").then(
                     (m) => m.ProviderCallbackPage,
                   ),
               },
@@ -85,7 +85,7 @@ export const accountRoute = {
               path: "provider/signup",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/provider-signup-page").then(
+                  import("@app/domains/account/pages/provider-signup-page").then(
                     (m) => m.ProviderSignupPage,
                   ),
               },
@@ -94,7 +94,7 @@ export const accountRoute = {
               path: "password/reset",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/password-reset-page").then(
+                  import("@app/domains/account/pages/password-reset-page").then(
                     (m) => m.PasswordResetPage,
                   ),
               },
@@ -103,7 +103,7 @@ export const accountRoute = {
               path: "password/reset/key/:key",
               lazy: {
                 Component: () =>
-                  import("@/domains/account/pages/password-reset-page").then(
+                  import("@app/domains/account/pages/password-reset-page").then(
                     (m) => m.PasswordResetPage,
                   ),
               },
@@ -120,7 +120,7 @@ export const accountRoute = {
           path: "oauth/popup-complete",
           lazy: {
             Component: () =>
-              import("@/domains/account/pages/oauth-popup-complete-page").then(
+              import("@app/domains/account/pages/oauth-popup-complete-page").then(
                 (m) => m.OAuthPopupCompletePage,
               ),
           },
@@ -129,7 +129,7 @@ export const accountRoute = {
           path: "oauth/complete",
           lazy: {
             Component: () =>
-              import("@/domains/account/pages/oauth-complete-page").then(
+              import("@app/domains/account/pages/oauth-complete-page").then(
                 (m) => m.OAuthCompletePage,
               ),
           },
@@ -142,7 +142,7 @@ export const accountRoute = {
           path: "cloud-callback",
           lazy: {
             Component: () =>
-              import("@/domains/account/pages/cloud-loopback-page").then(
+              import("@app/domains/account/pages/cloud-loopback-page").then(
                 (m) => m.CloudLoopbackPage,
               ),
           },
@@ -155,7 +155,7 @@ export const accountRoute = {
           middleware: [authMiddleware],
           lazy: {
             Component: () =>
-              import("@/domains/onboarding/pages/select-assistant-screen").then(
+              import("@web/domains/onboarding/pages/select-assistant-screen").then(
                 (m) => m.SelectAssistantScreen,
               ),
           },

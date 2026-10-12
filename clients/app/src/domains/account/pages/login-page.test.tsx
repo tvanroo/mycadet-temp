@@ -18,19 +18,19 @@ import {
   mockNativeAuth,
   renderAuthEntry,
   setupAuthEntry,
-} from "@/domains/account/pages/auth-entry-contract-test-helpers";
+} from "@app/domains/account/pages/auth-entry-contract-test-helpers";
 
-mock.module("@/stores/auth-store", mockAuthStore);
-mock.module("@/runtime/native-auth", mockNativeAuth);
-mock.module("@/lib/auth/hard-navigate", mockHardNavigate);
+mock.module("@web/stores/auth-store", mockAuthStore);
+mock.module("@web/runtime/native-auth", mockNativeAuth);
+mock.module("@web/lib/auth/hard-navigate", mockHardNavigate);
 // Light passthrough so the shared welcome chrome renders in happy-dom (the
 // avatar-wave canvas has nothing to draw on there), as the onboarding screen
 // tests do with the same layout.
-mock.module("@/components/onboarding-layout", () => ({
+mock.module("@web/components/onboarding-layout", () => ({
   OnboardingLayout: ({ children }: { children: ReactNode }) => children,
 }));
 
-const { LoginPage } = await import("@/domains/account/pages/login-page");
+const { LoginPage } = await import("@app/domains/account/pages/login-page");
 
 const ROUTE = "/account/login";
 

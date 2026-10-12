@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 
-import { AppleLogo } from "@/components/icons/apple-logo";
-import { Trans, useTranslation } from "@/i18n";
-import { SignupShell } from "@/domains/account/components/signup-shell";
-import { RotatingWord } from "@/domains/account/components/rotating-word";
+import { AppleLogo } from "@web/components/icons/apple-logo";
+import { Trans, useTranslation } from "@web/i18n";
+import { SignupShell } from "@app/domains/account/components/signup-shell";
+import { RotatingWord } from "@app/domains/account/components/rotating-word";
 import {
   PROVIDER_ID,
   buildProviderCallbackUrl,
-} from "@/domains/account/login-flow";
-import { startAuthFlow } from "@/runtime/native-auth";
+} from "@web/domains/account/login-flow";
+import { startAuthFlow } from "@web/runtime/native-auth";
 
 /**
  * Catalog keys for the rotating headline roles. The copy lives in the catalog;

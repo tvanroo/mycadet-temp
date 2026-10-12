@@ -15,10 +15,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
-import { useAssistantLifecycleStore } from "@/assistant/lifecycle-store";
-import * as authStore from "@/stores/auth-store";
-import * as nativeAuth from "@/runtime/native-auth";
-import type { CloudSessionStatus } from "@/stores/session-status";
+import { useAssistantLifecycleStore } from "@web/assistant/lifecycle-store";
+import * as authStore from "@web/stores/auth-store";
+import * as nativeAuth from "@web/runtime/native-auth";
+import type { CloudSessionStatus } from "@web/stores/session-status";
 
 export const CHECKOUT = "/assistant/checkout?package=super";
 const HOSTILE_DESTINATION = "https://evil.example";

@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 
-import { useTranslation } from "@/i18n";
-import { AccountHeading } from "@/components/account/account-form";
-import { AccountShell } from "@/components/account/account-shell";
-import { sanitizeReturnTo } from "@/domains/account/return-to";
-import { hardNavigate } from "@/lib/auth/hard-navigate";
-import { useAuthStore } from "@/stores/auth-store";
-import { routes } from "@/utils/routes";
+import { useTranslation } from "@web/i18n";
+import { AccountHeading } from "@app/components/account/account-form";
+import { AccountShell } from "@app/components/account/account-shell";
+import { sanitizeReturnTo } from "@web/domains/account/return-to";
+import { hardNavigate } from "@web/lib/auth/hard-navigate";
+import { useAuthStore } from "@web/stores/auth-store";
+import { routes } from "@web/utils/routes";
 
 export function LogoutPage() {
   const { t } = useTranslation("account");

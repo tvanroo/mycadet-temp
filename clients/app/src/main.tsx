@@ -1,18 +1,18 @@
 // Run localStorage migrations before any other app import — the modules
 // below read localStorage at module level.
-import "@/utils/run-storage-migrations";
+import "@web/utils/run-storage-migrations";
 
 import { useState } from "react";
 import { createBrowserRouter, Outlet } from "react-router";
 
-import { CreateAssistantDialog } from "@/components/create-assistant-dialog";
-import { RouteErrorBoundary } from "@/components/route-error-boundary";
-import { RootHydrateFallback } from "@/components/root-hydrate-fallback";
-import { start } from "@/boot";
-import { useCadetCommands } from "@/runtime/cadet-commands";
-import { getRouterBasename, routeTree } from "@/routes";
+import { CreateAssistantDialog } from "@web/components/create-assistant-dialog";
+import { RouteErrorBoundary } from "@web/components/route-error-boundary";
+import { RootHydrateFallback } from "@web/components/root-hydrate-fallback";
+import { start } from "@web/boot";
+import { useCadetCommands } from "@web/runtime/cadet-commands";
+import { getRouterBasename, routeTree } from "@web/routes";
 
-import { accountRoute } from "@/domains/account/account-route";
+import { accountRoute } from "@app/domains/account/account-route";
 
 // The tray "New Assistant…" name-prompt — account-level chrome the desktop
 // shell owns. The web module's served build never mounts it.
@@ -36,7 +36,7 @@ const logoutRoute = {
   HydrateFallback: RootHydrateFallback,
   lazy: {
     Component: () =>
-      import("@/domains/account/pages/logout-page").then((m) => m.LogoutPage),
+      import("@app/domains/account/pages/logout-page").then((m) => m.LogoutPage),
   },
 };
 

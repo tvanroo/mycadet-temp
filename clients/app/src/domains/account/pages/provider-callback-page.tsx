@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { useTranslation } from "@/i18n";
-import { captureError } from "@/lib/error-reporting/capture-error";
+import { useTranslation } from "@web/i18n";
+import { captureError } from "@web/lib/error-reporting/capture-error";
 
-import { AccountHeading } from "@/components/account/account-form";
-import { AccountShell } from "@/components/account/account-shell";
-import { listAssistants } from "@/assistant/api";
-import { refreshCloudAssistantsIfStale } from "@/assistant/cloud-assistants-sync";
-import { getSession } from "@/lib/auth/allauth-client";
+import { AccountHeading } from "@app/components/account/account-form";
+import { AccountShell } from "@app/components/account/account-shell";
+import { listAssistants } from "@web/assistant/api";
+import { refreshCloudAssistantsIfStale } from "@web/assistant/cloud-assistants-sync";
+import { getSession } from "@web/lib/auth/allauth-client";
 import {
   readAuthCallbackIntent,
   resolvePostAuthDestination,
-} from "@/domains/account/login-flow";
-import { classifyCallbackFlows } from "@/domains/account/social-auth";
-import { isLocalClient } from "@/lib/local-mode";
-import { useAuthStore } from "@/stores/auth-store";
-import { routes } from "@/utils/routes";
+} from "@web/domains/account/login-flow";
+import { classifyCallbackFlows } from "@web/domains/account/social-auth";
+import { isLocalClient } from "@web/lib/local-mode";
+import { useAuthStore } from "@web/stores/auth-store";
+import { routes } from "@web/utils/routes";
 import { cn } from "@mycadet/design-library/utils/cn";
 import { textLinkVariants } from "@mycadet/design-library/components/text-link";
 

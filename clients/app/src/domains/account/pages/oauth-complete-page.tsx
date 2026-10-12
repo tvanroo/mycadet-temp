@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 
-import { useTranslation } from "@/i18n";
+import { useTranslation } from "@web/i18n";
 import { useSearchParams } from "react-router";
 
 import {
   oauthCompletionStorageKey,
   type OAuthCompletePayload,
-} from "@/lib/auth/oauth-popup";
+} from "@web/lib/auth/oauth-popup";
 
 // ── SVG icons ────────────────────────────────────────────────────────────────
 

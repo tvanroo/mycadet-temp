@@ -15,7 +15,9 @@
     "isolatedModules": true,
     "types": ["bun"],
     "paths": {
-      "@/*": ["./src/*", "../web/src/*"]
+      "@app/*": ["./src/*"],
+      "@web/*": ["../web/src/*"],
+      "@/*": ["../web/src/*"]
     }
   },
   "include": ["src", "../web/src"]

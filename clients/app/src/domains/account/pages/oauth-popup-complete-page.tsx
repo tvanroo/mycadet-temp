@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router";
 
-import { useTranslation } from "@/i18n";
-import { oauthCompletionStorageKey } from "@/lib/auth/oauth-popup";
+import { useTranslation } from "@web/i18n";
+import { oauthCompletionStorageKey } from "@web/lib/auth/oauth-popup";
 import {
   buildOAuthCompleteDeepLink,
   getNativeUrlSchemeForHost,
-} from "@/runtime/native-deep-link";
+} from "@web/runtime/native-deep-link";
 
 /**
  * OAuth popup completion page.

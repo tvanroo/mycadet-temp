@@ -14,7 +14,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import * as nativeAuth from "@/runtime/native-auth";
+import * as nativeAuth from "@web/runtime/native-auth";
 
 /** Settlers for the flows started so far, so each one stays pending. */
 const startedFlows: {
@@ -22,7 +22,7 @@ const startedFlows: {
   reject: (err: unknown) => void;
 }[] = [];
 
-mock.module("@/runtime/native-auth", (): typeof nativeAuth => ({
+mock.module("@web/runtime/native-auth", (): typeof nativeAuth => ({
   ...nativeAuth,
   startAuthFlow: () =>
     new Promise<void>((resolve, reject) => {
@@ -31,7 +31,7 @@ mock.module("@/runtime/native-auth", (): typeof nativeAuth => ({
 }));
 
 const { SignupScreen } =
-  await import("@/domains/account/components/signup-screen");
+  await import("@app/domains/account/components/signup-screen");
 
 const GENERIC_FAILURE = "Something went wrong. Please try again.";
 

@@ -1,23 +1,23 @@
 import { useState } from "react";
 import { useLocation } from "react-router";
 
-import { useTranslation } from "@/i18n";
+import { useTranslation } from "@web/i18n";
 import {
   AuthWelcomeScreen,
   WelcomeScreenCopy,
   WelcomeScreenShell,
-} from "@/components/auth-welcome-screen";
-import { AuthWaitSpinner } from "@/domains/account/components/auth-wait-spinner";
-import { useReturnToShortCircuit } from "@/domains/account/hooks/use-return-to-short-circuit";
+} from "@web/components/auth-welcome-screen";
+import { AuthWaitSpinner } from "@app/domains/account/components/auth-wait-spinner";
+import { useReturnToShortCircuit } from "@app/domains/account/hooks/use-return-to-short-circuit";
 import {
   isUserCancelledAuthError,
   nativeAuthErrorDetail,
   nativeAuthErrorKey,
-} from "@/domains/account/native-auth-error";
-import { withPreservedAttribution } from "@/domains/account/social-auth";
-import { captureError } from "@/lib/error-reporting/capture-error";
-import { startNativeLogin, useIsNativePlatform } from "@/runtime/native-auth";
-import { routes } from "@/utils/routes";
+} from "@web/domains/account/native-auth-error";
+import { withPreservedAttribution } from "@web/domains/account/social-auth";
+import { captureError } from "@web/lib/error-reporting/capture-error";
+import { startNativeLogin, useIsNativePlatform } from "@web/runtime/native-auth";
+import { routes } from "@web/utils/routes";
 import { Button } from "@mycadet/design-library";
 
 /**

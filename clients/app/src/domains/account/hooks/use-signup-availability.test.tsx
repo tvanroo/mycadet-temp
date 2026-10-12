@@ -7,11 +7,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 
-import * as allauthClient from "@/lib/auth/allauth-client";
+import * as allauthClient from "@web/lib/auth/allauth-client";
 import type {
   AllauthResult,
   AuthConfiguration,
-} from "@/lib/auth/allauth-client";
+} from "@web/lib/auth/allauth-client";
 
 const authConfig = {
   result: null as AllauthResult<AuthConfiguration> | null,
@@ -20,7 +20,7 @@ const authConfig = {
   calls: 0,
 };
 
-mock.module("@/lib/auth/allauth-client", () => ({
+mock.module("@web/lib/auth/allauth-client", () => ({
   ...allauthClient,
   getAuthConfig: () => {
     authConfig.calls += 1;
@@ -34,7 +34,7 @@ mock.module("@/lib/auth/allauth-client", () => ({
 }));
 
 const { useSignupAvailability } =
-  await import("@/domains/account/hooks/use-signup-availability");
+  await import("@app/domains/account/hooks/use-signup-availability");
 
 const configReporting = (
   isOpenForSignup: boolean,

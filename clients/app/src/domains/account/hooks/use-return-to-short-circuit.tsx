@@ -4,15 +4,15 @@ import { Navigate, useSearchParams } from "react-router";
 import {
   requiresFullPageNavigation,
   requiresCloudSession,
-} from "@/domains/account/login-flow";
-import { sanitizeReturnTo } from "@/domains/account/return-to";
-import { useCloudGateWithPending } from "@/hooks/use-cloud-gate";
-import { hardNavigate } from "@/lib/auth/hard-navigate";
+} from "@web/domains/account/login-flow";
+import { sanitizeReturnTo } from "@web/domains/account/return-to";
+import { useCloudGateWithPending } from "@web/hooks/use-cloud-gate";
+import { hardNavigate } from "@web/lib/auth/hard-navigate";
 import {
   useIsAuthenticated,
   useIsSessionInitializing,
-} from "@/stores/auth-store";
-import { routes } from "@/utils/routes";
+} from "@web/stores/auth-store";
+import { routes } from "@web/utils/routes";
 
 /**
  * What an auth entry point should render.

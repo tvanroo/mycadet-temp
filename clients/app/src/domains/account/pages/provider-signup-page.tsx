@@ -5,23 +5,23 @@ import {
   AccountForm,
   AccountHeading,
   AccountInput,
-} from "@/components/account/account-form";
-import { useTranslation } from "@/i18n";
-import { refreshCloudAssistantsIfStale } from "@/assistant/cloud-assistants-sync";
-import { AccountShell } from "@/components/account/account-shell";
-import { SignupShell } from "@/domains/account/components/signup-shell";
+} from "@app/components/account/account-form";
+import { useTranslation } from "@web/i18n";
+import { refreshCloudAssistantsIfStale } from "@web/assistant/cloud-assistants-sync";
+import { AccountShell } from "@app/components/account/account-shell";
+import { SignupShell } from "@app/domains/account/components/signup-shell";
 import {
   getProviderSignup,
   isConflict,
   submitProviderSignup,
-} from "@/lib/auth/allauth-client";
-import { setSignupOnboardingFirstName } from "@/lib/auth/signup-onboarding-handoff";
+} from "@web/lib/auth/allauth-client";
+import { setSignupOnboardingFirstName } from "@web/lib/auth/signup-onboarding-handoff";
 import {
   resolvePostAuthDestination,
   resolvePostLoginDestination,
-} from "@/domains/account/login-flow";
-import { useAuthStore } from "@/stores/auth-store";
-import { routes } from "@/utils/routes";
+} from "@web/domains/account/login-flow";
+import { useAuthStore } from "@web/stores/auth-store";
+import { routes } from "@web/utils/routes";
 import { cn } from "@mycadet/design-library/utils/cn";
 import { textLinkVariants } from "@mycadet/design-library/components/text-link";
 

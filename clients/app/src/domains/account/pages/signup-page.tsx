@@ -1,9 +1,9 @@
-import { AuthWaitSpinner } from "@/domains/account/components/auth-wait-spinner";
-import { SignupClosedScreen } from "@/domains/account/components/signup-closed-screen";
-import { SignupScreen } from "@/domains/account/components/signup-screen";
-import { SignupShell } from "@/domains/account/components/signup-shell";
-import { useReturnToShortCircuit } from "@/domains/account/hooks/use-return-to-short-circuit";
-import { useSignupAvailability } from "@/domains/account/hooks/use-signup-availability";
+import { AuthWaitSpinner } from "@app/domains/account/components/auth-wait-spinner";
+import { SignupClosedScreen } from "@app/domains/account/components/signup-closed-screen";
+import { SignupScreen } from "@app/domains/account/components/signup-screen";
+import { SignupShell } from "@app/domains/account/components/signup-shell";
+import { useReturnToShortCircuit } from "@app/domains/account/hooks/use-return-to-short-circuit";
+import { useSignupAvailability } from "@app/domains/account/hooks/use-signup-availability";
 
 /**
  * Signup entry. Renders the branded sign-up screen: a rotating headline with

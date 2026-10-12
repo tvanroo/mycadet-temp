@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 
-import { useTranslation } from "@/i18n";
+import { useTranslation } from "@web/i18n";
 
 /**
  * Held by `/account/login` and `/account/signup` while the session behind the
