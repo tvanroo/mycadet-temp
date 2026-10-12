@@ -2,7 +2,7 @@
  * Live-voice wire contract, as much of it as a microphone-less client needs.
  *
  * Ported from `assistant/src/live-voice/protocol.ts`, the same way
- * `clients/web/src/domains/chat/voice/live-voice/protocol.ts` is: the CLI ships
+ * `packages/assistant-ui/src/domains/chat/voice/live-voice/protocol.ts` is: the CLI ships
  * as an npm package and nothing outside `cli/` lands in the tarball, so the
  * daemon's copy cannot be imported. Deliberately a subset rather than a full
  * port. This client never captures audio, so the capture half of the protocol

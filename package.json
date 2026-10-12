@@ -18,6 +18,7 @@
     "gateway",
     "packages/app-icons",
     "packages/assistant-client",
+    "packages/assistant-ui",
     "packages/avatar-catalog",
     "packages/avatar-manifest",
     "packages/ces-client",

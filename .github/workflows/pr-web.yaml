@@ -7,6 +7,9 @@ on:
       - "package.json"
       - "patches/**"
       - "clients/web/**"
+      # The web bundle is built from the shared assistant-ui package, so a
+      # package change can break the web build with no web file touched.
+      - "packages/assistant-ui/**"
       - "assistant/src/api/**"
       # `openapi-ts` generates the web's daemon client from this spec, so a
       # schema change here can break the web build with no web file touched.
@@ -72,7 +75,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Lint assistant-ui
+        working-directory: packages/assistant-ui
+        run: bun run lint
+
       - name: Audit cross-domain import allow-list freshness
+        working-directory: packages/assistant-ui
         run: |
           if ! bun run audit:cross-domain:check; then
             echo "::group::regenerated allow-list diff"
@@ -83,6 +91,10 @@ jobs:
           fi
 
       - name: Type check
+        run: bun run typecheck
+
+      - name: Type check assistant-ui
+        working-directory: packages/assistant-ui
         run: bun run typecheck
 
       - name: Build
@@ -99,3 +111,9 @@ jobs:
           TEST_DIFF_ONLY: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         run: bun run test:ci
 
+      - name: Test assistant-ui
+        working-directory: packages/assistant-ui
+        env:
+          TEST_TIMEOUT_MS: 15000
+          TEST_DIFF_ONLY: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+        run: bun run test:ci

@@ -24,7 +24,7 @@
  * These shapes mirror those handlers' request/response bodies exactly so the
  * gateway, the `cadet pair` CLI (`cli/src/commands/pair.ts`), the host-side
  * pairing sessions (`packages/local-mode/src/pair.ts`), and the web SPA
- * (`clients/web/src/lib/auth/remote-gateway-session.ts`) share one definition
+ * (`packages/assistant-ui/src/lib/auth/remote-gateway-session.ts`) share one definition
  * and cannot silently drift.
  *
  * Timestamps are ISO-8601 strings — every gateway response serializes them via

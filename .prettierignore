@@ -13,4 +13,4 @@ worktrees/
 # output. Prettier collapses the single-element arrays that
 # `JSON.stringify(..., null, 2)` expands, so formatting this file makes the
 # gate fail on a diff with no content change. The generator is its formatter.
-clients/web/.cross-domain-allowlist.json
+packages/assistant-ui/.cross-domain-allowlist.json

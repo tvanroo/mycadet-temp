@@ -139,13 +139,13 @@ whichever Swift channel you have around.
   items dispatch through the typed command bus in `src/main/commands.ts`,
   which broadcasts to the focused window's renderer via a single
   `cadet:command` IPC channel (subscribed to by `useCadetCommands` in
-  `clients/web/src/runtime/cadet-commands.ts`). Accelerators are read from
+  `packages/assistant-ui/src/runtime/cadet-commands.ts`). Accelerators are read from
   `settings.hotkeys.<kind>` with defaults from `DEFAULT_ACCELERATORS`.
   `View > Toggle Developer Tools` is gated to dev builds only so the
   packaged build doesn't expose devtools to end users.
 
 - **Share Sheet** (`src/main/share.ts`). The renderer's `shareFile`
-  (`clients/web/src/runtime/native-file.ts`) hands file bytes over the
+  (`packages/assistant-ui/src/runtime/native-file.ts`) hands file bytes over the
   `cadet:share:file` channel; the main process writes them to a temp file and
   presents the native `NSSharingServicePicker` via Electron's `ShareMenu`.
   Only the _share_ intent routes here. A "Download" action goes through
@@ -382,13 +382,13 @@ The preload script exposes a typed `window.cadet` API to the renderer:
 - `commands.on(callback)` — subscribe to main-process commands dispatched
   by the application menu (and, eventually, global hotkeys). Returns an
   unsubscribe function. The renderer-side wrapper is
-  [`clients/web/src/runtime/cadet-commands.ts`](../web/src/runtime/cadet-commands.ts);
+  [`packages/assistant-ui/src/runtime/cadet-commands.ts`](../web/src/runtime/cadet-commands.ts);
   feature code mounts the `useCadetCommands` hook with a partial handler
   map at whichever component owns the relevant state.
 - `dock.setBadge(count)` / `dock.setSignedIn(signedIn)` — publish the
   inputs that drive the Dock unread badge and visibility state machine
   in [`src/main/dock.ts`](src/main/dock.ts). Renderer wrapper at
-  [`clients/web/src/runtime/dock.ts`](../web/src/runtime/dock.ts) (no-ops
+  [`packages/assistant-ui/src/runtime/dock.ts`](../web/src/runtime/dock.ts) (no-ops
   off Electron); feature code calls
   `useElectronDockSync(conversations)` from `ChatLayout` to keep them in
   sync. The accessory-mode (Dock-hidden) transition is gated on
@@ -403,7 +403,7 @@ The preload script exposes a typed `window.cadet` API to the renderer:
   on disk. Every method is a thin wrapper over [`@mycadet/local-mode`](../../packages/local-mode/),
   the shared host library that also backs the web app's dev-server middleware,
   so the spawn/parse and lockfile logic lives in one place. The renderer-side
-  transport seam is [`clients/web/src/runtime/local-mode-host.ts`](../web/src/runtime/local-mode-host.ts),
+  transport seam is [`packages/assistant-ui/src/runtime/local-mode-host.ts`](../web/src/runtime/local-mode-host.ts),
   which selects this bridge on Electron and the dev-server `/assistant/__local/*`
   middleware on web/dev so both hosts honor the same contract.
 - `helper.hotkey.setModifierHold(hold)` points the native helper at the
@@ -449,7 +449,7 @@ guidance from the [security tutorial](https://www.electronjs.org/docs/latest/tut
 which keeps the renderer-exposed surface narrow and auditable.
 
 Renderer-side consumers in `clients/web/` should wrap bridge access in a
-per-capability module (see `clients/web/src/runtime/native-biometric.ts` for
+per-capability module (see `packages/assistant-ui/src/runtime/native-biometric.ts` for
 the established shape) rather than reaching into `window.cadet.*`
 directly from feature code. That keeps the cloud-branching logic in
 one place and makes the cross-platform contract (web / iOS / Electron)

@@ -15,7 +15,7 @@ one owns the native contracts.
 Nothing about the *conversation* is native. Mic capture (`getUserMedia` →
 AudioWorklet → PCM), the tunnel WebSocket, TTS playback, turn state, and every
 user-facing string all live under
-`clients/web/src/domains/chat/voice/live-voice/`. The native side contributes
+`packages/assistant-ui/src/domains/chat/voice/live-voice/`. The native side contributes
 exactly four things:
 
 | Native surface | What it is |
@@ -607,7 +607,7 @@ What is genuinely impossible is fetching anything at render time: a Live
 Activity draws from a snapshot, so a URL would only ever render `AsyncImage`'s
 placeholder. That is also why the avatar is sized to a measured byte ceiling
 before it is sent. See `ISLAND_AVATAR_MAX_BYTES` in
-`clients/web/src/utils/avatar-island-encode.ts`, where oversize kills the whole
+`packages/assistant-ui/src/utils/avatar-island-encode.ts`, where oversize kills the whole
 activity rather than degrading the image.
 
 *The appex does carry one App Group, for a different path:* the group named by
@@ -820,13 +820,13 @@ Web-side counterparts:
 
 | Path | Role |
 | --- | --- |
-| `clients/web/src/runtime/native-voice.ts` | `callNativeVoice` — the skew-safe seam |
-| `clients/web/src/runtime/native-audio-session.ts` | `VoiceAudioSession` bridge |
-| `clients/web/src/runtime/native-live-activity.ts` | `VoiceLiveActivity` bridge — content out, button presses back |
-| `clients/web/src/runtime/native-deep-link.ts` | `parseStartVoiceDeepLink` and prompt sanitization |
-| `clients/web/src/domains/chat/voice/live-voice/use-live-activity-mirror.ts` | Store → island mirror |
-| `clients/web/src/domains/chat/voice/live-voice/use-live-voice-session-controller.ts` | Mounts the mirror and the audio-session lifecycle |
-| `clients/web/src/hooks/use-global-deep-link-consumer.ts` | `deeplink.startVoice` consumer |
+| `packages/assistant-ui/src/runtime/native-voice.ts` | `callNativeVoice` — the skew-safe seam |
+| `packages/assistant-ui/src/runtime/native-audio-session.ts` | `VoiceAudioSession` bridge |
+| `packages/assistant-ui/src/runtime/native-live-activity.ts` | `VoiceLiveActivity` bridge — content out, button presses back |
+| `packages/assistant-ui/src/runtime/native-deep-link.ts` | `parseStartVoiceDeepLink` and prompt sanitization |
+| `packages/assistant-ui/src/domains/chat/voice/live-voice/use-live-activity-mirror.ts` | Store → island mirror |
+| `packages/assistant-ui/src/domains/chat/voice/live-voice/use-live-voice-session-controller.ts` | Mounts the mirror and the audio-session lifecycle |
+| `packages/assistant-ui/src/hooks/use-global-deep-link-consumer.ts` | `deeplink.startVoice` consumer |
 
 ## See also
 

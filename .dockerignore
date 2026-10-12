@@ -22,6 +22,7 @@
 !clients/web/package.json
 !clients/windows/package.json
 !cli/package.json
+!packages/assistant-ui/package.json
 # Although we have a `**` ignore that correctly excludes large build artifacts from the build context,
 # it seems the walker doesn't prune a directory when there are `!` exceptions that can include files
 # beneath that directory. This manifests as an extremely long build context load time.

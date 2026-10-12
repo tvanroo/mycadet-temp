@@ -1,2 +1,2 @@
 [test]
-preload = ["../web/test-setup.ts"]
+preload = ["../../packages/assistant-ui/test-setup.ts"]

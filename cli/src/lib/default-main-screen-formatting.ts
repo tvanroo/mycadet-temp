@@ -26,7 +26,7 @@ const MESSAGE_SPACING = 1;
 
 /**
  * Kept in sync with the web client's command set
- * (clients/web slash-command-catalog) plus the CLI-local commands.
+ * (packages/assistant-ui slash-command-catalog) plus the CLI-local commands.
  */
 export const HELP_COMMANDS = [
   {

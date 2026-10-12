@@ -25,7 +25,7 @@ import { TrustClassSchema } from "./trust-verdict-contract.js";
  * Auto-approve threshold stored per cell: the highest tool `RiskLevel` that
  * auto-approves. Same vocabulary as `auto_approve_thresholds`; the
  * Strict / Conservative / Relaxed / Full-access presets are a presentation
- * layer over these values (`clients/web/src/utils/threshold-presets.ts`).
+ * layer over these values (`packages/assistant-ui/src/utils/threshold-presets.ts`).
  */
 export const RISK_THRESHOLD_VALUES = ["none", "low", "medium", "high"] as const;
 

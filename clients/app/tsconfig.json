@@ -15,8 +15,8 @@
     "isolatedModules": true,
     "types": ["bun"],
     "paths": {
-      "@/*": ["./src/*", "../web/src/*"]
+      "@/*": ["./src/*", "../../packages/assistant-ui/src/*"]
     }
   },
-  "include": ["src", "../web/src"]
+  "include": ["src", "../../packages/assistant-ui/src/**/*.d.ts"]
 }

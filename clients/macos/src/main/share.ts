@@ -10,7 +10,7 @@ import { handle } from "./ipc";
 /**
  * macOS Share Sheet bridge.
  *
- * The renderer's cross-platform `saveFile` (clients/web/src/runtime/
+ * The renderer's cross-platform `saveFile` (packages/assistant-ui/src/runtime/
  * native-file.ts) routes here on the Electron host: it hands over the file
  * bytes + name, and this presents the native `NSSharingServicePicker`
  * (Messages, Mail, AirDrop, Slack, Save to Files, …) — the same "export from

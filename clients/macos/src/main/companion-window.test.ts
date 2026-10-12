@@ -2765,7 +2765,7 @@ describe("the introduction announcement", () => {
  * order: the app is asked for a session, and the run that asked is then over.
  * The app's first-run voice card stands down while a run is on, so that this
  * offer reaches a session rather than a third card
- * (`clients/web/src/domains/chat/voice/live-voice/voice-entry-guards.ts`).
+ * (`packages/assistant-ui/src/domains/chat/voice/live-voice/voice-entry-guards.ts`).
  * Told the run was over first, it would put itself in front of the one press
  * the whole run was building to.
  */

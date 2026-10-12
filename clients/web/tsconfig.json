@@ -15,14 +15,14 @@
     "isolatedModules": true,
     "types": ["bun"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["../../packages/assistant-ui/src/*"],
+      "@mycadet/assistant-ui/*": ["../../packages/assistant-ui/src/*"]
     }
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    ".storybook/**/*.ts",
-    ".storybook/**/*.tsx",
+    "../../packages/assistant-ui/src/**/*.d.ts",
     "capacitor.config.ts"
   ],
   "exclude": ["dist/**", "node_modules/**"]

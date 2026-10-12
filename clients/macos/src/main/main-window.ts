@@ -413,7 +413,7 @@ export const installMainWindow = (): void => {
   // IPC surface for renderer-driven "bring the window forward"
   // actions — used by feature consumers reacting to inbound signals
   // (deep links, future notification clicks, etc.). The renderer
-  // wrapper at `clients/web/src/runtime/main-window.ts` calls this; the
+  // wrapper at `packages/assistant-ui/src/runtime/main-window.ts` calls this; the
   // handler returns void so the caller can `await` without value.
   handle(
     "cadet:mainWindow:ensureVisible",

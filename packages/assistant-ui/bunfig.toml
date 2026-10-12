@@ -1,0 +1,9 @@
+[test]
+
+# happy-dom provides window, document, localStorage, sessionStorage, fetch,
+# and other browser APIs so component tests and hooks that touch the DOM can
+# run in Bun's test runner without a real browser. Both the served entry and
+# the desktop entry preload this same file for their own suites.
+#
+# Reference: https://github.com/nicedoc/happy-dom/wiki/GlobalRegistrator
+preload = ["./test-setup.ts"]

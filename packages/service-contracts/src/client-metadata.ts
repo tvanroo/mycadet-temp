@@ -2,7 +2,7 @@
  * Client-metadata analytics headers.
  *
  * The web client attaches these to every daemon request via
- * `getClientRegistrationHeaders()` (`clients/web/src/lib/telemetry/
+ * `getClientRegistrationHeaders()` (`packages/assistant-ui/src/lib/telemetry/
  * client-identity.ts`), the gateway allows them through webview CORS
  * (`gateway/src/http/middleware/cors.ts`) and forwards them to the daemon
  * by `x-cadet-*` prefix, and the daemon persists them under

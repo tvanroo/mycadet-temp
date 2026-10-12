@@ -7,6 +7,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
+    "@mycadet/assistant-ui": "workspace:*",
     "@mycadet/design-library": "workspace:*",
     "lucide-react": "1.16.0",
     "motion": "12.39.0",
@@ -26,9 +27,9 @@
     "vite": "8.0.11"
   },
   "scripts": {
-    "predev": "cd ../web && bun run openapi-ts",
+    "predev": "cd ../../packages/assistant-ui && bun run openapi-ts",
     "dev": "bun --bun vite",
-    "prebuild": "cd ../web && bun run openapi-ts && node ../web/scripts/copy-skill-assets.mjs",
+    "prebuild": "cd ../../packages/assistant-ui && bun run openapi-ts && node ../../packages/assistant-ui/scripts/copy-skill-assets.mjs",
     "build": "bun --bun vite build",
     "preview": "bun --bun vite preview",
     "test": "bun test",

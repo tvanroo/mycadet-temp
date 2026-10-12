@@ -2,7 +2,7 @@
  * Drift guard for the marketing attribution allowlist.
  *
  * `ATTRIBUTION_PARAMS` and `ATTRIBUTION_VALUE_MAX_LENGTH` in
- * `clients/web/src/domains/account/social-auth.ts` are the source of truth for
+ * `packages/assistant-ui/src/domains/account/social-auth.ts` are the source of truth for
  * which campaign params reach the cloud and how long each may be. Neither
  * Swift nor Java can import TypeScript, so both native shells embed the list
  * verbatim: `Attribution` in `clients/ios/App/App/Attribution.swift` and
@@ -25,7 +25,7 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dir, "../../../..");
 
 const SOURCES = {
-  typescript: join(REPO_ROOT, "clients/web/src/domains/account/social-auth.ts"),
+  typescript: join(REPO_ROOT, "packages/assistant-ui/src/domains/account/social-auth.ts"),
   swift: join(REPO_ROOT, "clients/ios/App/App/Attribution.swift"),
   java: join(
     REPO_ROOT,

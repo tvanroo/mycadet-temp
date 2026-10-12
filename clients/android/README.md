@@ -100,7 +100,7 @@ with it.
 
 A user picks an eyes-on-color launcher icon in the web app under
 Settings -> General -> Preferences -> App icon
-(`clients/web/src/domains/settings/components/app-icon-modal.tsx`), gated on the
+(`packages/assistant-ui/src/domains/settings/components/app-icon-modal.tsx`), gated on the
 dark `android-avatar-app-icon` flag. Every combination ships: 9 eye styles by 6
 colors, so 54 alternates.
 
@@ -199,7 +199,7 @@ that separates a hand-rounded bounding box from a rasterized measurement.
 narrower so it does not draw the same icon as `surprised`, which is the same
 shape. The spans live in `clients/ios/scripts/avatar-icon-core.ts`, shared with
 the iOS generator and mirrored by
-`clients/web/src/components/avatar/app-icon-preview.tsx` so the picker's
+`packages/assistant-ui/src/components/avatar/app-icon-preview.tsx` so the picker's
 on-screen preview frames a pair the way the launcher does.
 
 ### Device QA Checklist
@@ -277,7 +277,7 @@ takeover, billing settings) but sells nothing in-app: there is no Google Play
 Billing integration, and every purchase CTA opens the matching page on the
 hosted web app in the system browser instead of starting a checkout inside the
 WebView. The handoff lives in
-`clients/web/src/lib/billing/android-billing-handoff.ts`; it goes through the
+`packages/assistant-ui/src/lib/billing/android-billing-handoff.ts`; it goes through the
 Capacitor Browser plugin because a plain navigation would stay in the WebView
 and a bare VIEW intent would bounce straight back via the verified App Links
 above. Because the purchase runs on the hosted web app in a plain browser

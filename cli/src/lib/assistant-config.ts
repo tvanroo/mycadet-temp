@@ -699,7 +699,7 @@ export function saveAssistantEntry(entry: AssistantEntry): void {
 
 /**
  * The client-minted uuid this CLI addresses the assistant's chat
- * conversation by (web's temp-client-id pattern: clients/web
+ * conversation by (web's temp-client-id pattern: packages/assistant-ui
  * document-conversation mints a uuid, persists it, and passes it as the
  * conversation key so creation is retry-safe). Minted once and persisted
  * on the entry so every session shares one conversation.

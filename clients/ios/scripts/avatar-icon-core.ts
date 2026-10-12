@@ -15,7 +15,7 @@ import { getResvg } from "../../../assistant/src/avatar/resvg-lazy.js";
  * Fraction of the icon an eye pair's tight bounds span, for every style the
  * table below does not name.
  *
- * `clients/web/src/components/avatar/app-icon-preview.tsx` mirrors both this
+ * `packages/assistant-ui/src/components/avatar/app-icon-preview.tsx` mirrors both this
  * number and the table, so its on-screen preview frames a pair the way the
  * shipped PNG does. Each side pins the numbers in its own tests, since a web
  * bundle cannot import a build script that rasterizes SVG. A span moves here

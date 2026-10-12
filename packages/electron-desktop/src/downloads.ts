@@ -17,7 +17,7 @@ import type { IpcHandle } from "./ipc";
  * Downloads: files a renderer download into the host's Downloads folder and
  * reports the outcome back to the window that started it.
  *
- * The renderer's `saveFile` (clients/web/src/runtime/native-file.ts) downloads
+ * The renderer's `saveFile` (packages/assistant-ui/src/runtime/native-file.ts) downloads
  * the browser way, an `<a download>` click on a blob URL, which Chromium turns
  * into a real download item and Electron surfaces here as `will-download`.
  * Absent a handler, Electron falls back to its "original routine" and prompts a

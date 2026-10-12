@@ -78,7 +78,7 @@ export const getVersionInfo = (): AppVersionInfo => ({
 });
 
 // The renderer route the About window loads. Mirrors `routes.about` in
-// `clients/web/src/utils/routes.ts`; the literal is duplicated rather than
+// `packages/assistant-ui/src/utils/routes.ts`; the literal is duplicated rather than
 // imported because `clients/macos` and `clients/web` are separate TS projects.
 // Drift surfaces as the About window loading the app's catch-all
 // NotFound page.

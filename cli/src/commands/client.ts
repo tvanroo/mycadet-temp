@@ -1297,7 +1297,7 @@ async function spawnBackgroundWebInterface(
  *
  * It carries no `assistantId`: this host also serves `handleLocalEndpoints`, so
  * the SPA on it switches between every assistant in the lockfile, exactly like
- * the Vite dev server (`clients/web/vite-plugin-local-mode.ts`, which omits the
+ * the Vite dev server (`packages/assistant-ui/vite-plugin-local-mode.ts`, which omits the
  * id for the same reason). An id here would be the launch-time one, and a probe
  * for any other assistant this origin serves would read it as a mismatch and
  * report a false `foreign`. An absent id is deliberately benign to the probe.

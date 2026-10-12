@@ -8,7 +8,7 @@
  * same turn runner, the same segmented TTS, and the same barge-in as a spoken
  * one. Only the capture half is skipped.
  *
- * Modeled on `clients/web/src/domains/chat/voice/live-voice/live-voice-client.ts`
+ * Modeled on `packages/assistant-ui/src/domains/chat/voice/live-voice/live-voice-client.ts`
  * and deliberately narrower: no audio upload, no push-to-talk, no mid-session
  * config updates. After `end()` or a failure the instance is terminal.
  */

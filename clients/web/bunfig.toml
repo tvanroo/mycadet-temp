@@ -5,4 +5,4 @@
 # run in Bun's test runner without a real browser.
 #
 # Reference: https://github.com/nicedoc/happy-dom/wiki/GlobalRegistrator
-preload = ["./test-setup.ts"]
+preload = ["../../packages/assistant-ui/test-setup.ts"]

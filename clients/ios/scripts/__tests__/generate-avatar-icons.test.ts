@@ -87,7 +87,7 @@ const DEFAULT_EYE_SPAN_FRACTION = 0.5;
 /**
  * Fraction of the icon each eye style's pair is fitted to, pinned as literals.
  *
- * `clients/web/src/components/avatar/app-icon-preview.test.tsx` pins the same
+ * `packages/assistant-ui/src/components/avatar/app-icon-preview.test.tsx` pins the same
  * numbers against its own independent measurement of the same artwork, so the
  * on-screen preview and the shipped icons cannot drift apart across the bundle
  * boundary between them. A span that moved on one side alone fails here rather
@@ -272,7 +272,7 @@ describe("iconNameForTraits", () => {
   /**
    * The literal is the wire contract with the web layer, which pins the same
    * `avatar-eyes-grumpy-green` string in
-   * `clients/web/src/utils/avatar-app-icon.test.ts`. Both have to change
+   * `packages/assistant-ui/src/utils/avatar-app-icon.test.ts`. Both have to change
    * together, and a rename ships under a new name rather than replacing the
    * artwork behind this one.
    */

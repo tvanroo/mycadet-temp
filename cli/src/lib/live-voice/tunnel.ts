@@ -10,7 +10,7 @@
  * right one for the cloud.
  *
  * So the connection is made in two hops, the same two the web voice room makes
- * (`clients/web/src/domains/chat/voice/live-voice/connection.ts`):
+ * (`packages/assistant-ui/src/domains/chat/voice/live-voice/connection.ts`):
  *
  *  1. POST the cloud for a short-lived, org+assistant-scoped WS token.
  *  2. Open `wss://<tunnel>/<assistantId>/v1/live-voice?token=<wsToken>`.
