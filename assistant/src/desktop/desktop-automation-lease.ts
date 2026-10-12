@@ -124,6 +124,12 @@ export class DesktopAutomationLease {
     }
   }
 
+  /** Whether `conversationId` currently holds the lease — the real-state read
+   *  for release-before-idle ordering assertions. */
+  isConversationHeld(conversationId: string): boolean {
+    return this.owner?.conversationId === conversationId;
+  }
+
   private bindCancellation(owner: Owner, signal?: AbortSignal): void {
     owner.removeAbortListener();
     const cancel = () => this.cancel(owner);
