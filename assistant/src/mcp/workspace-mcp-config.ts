@@ -168,25 +168,3 @@ export function saveWorkspaceMcpConfig(config: McpConfig): void {
   writeFileSync(tmpPath, JSON.stringify(document, null, 2) + "\n");
   renameSync(tmpPath, path);
 }
-
-/**
- * Replace `config.mcp` on a settings/export payload with the projected
- * workspace servers (transport only, headers stripped). Old clients that
- * still read `mcp.servers` from `/v1/config` keep seeing the same shape.
- */
-export function overlayWorkspaceMcpForConfigRead(config: unknown): void {
-  if (config === null || typeof config !== "object" || Array.isArray(config)) {
-    return;
-  }
-  const root = config as Record<string, unknown>;
-  const { servers } = loadWorkspaceMcpConfig();
-  const projected: Record<string, unknown> = {};
-  for (const [id, server] of Object.entries(servers)) {
-    const { headers: _headers, ...safeTransport } = server.transport as Record<
-      string,
-      unknown
-    >;
-    projected[id] = { transport: safeTransport };
-  }
-  root.mcp = { servers: projected };
-}

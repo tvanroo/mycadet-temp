@@ -36,13 +36,9 @@ import {
   validateChatSettingsWrite,
 } from "../../config/chat-settings.js";
 import {
-  catalogEntryFor,
-  modalitiesOf,
-  resolveModalityOverride,
-} from "../../config/input-modalities.js";
-import {
   deepMergeOverwrite,
   getConfig,
+  getNestedValue,
   invalidateConfigCache,
   loadConfig,
   loadRawConfig,
@@ -100,7 +96,6 @@ import {
   log,
 } from "../../daemon/handlers/shared.js";
 import { rescheduleHeartbeatIfTimezoneChanged } from "../../heartbeat/heartbeat-service.js";
-import { overlayWorkspaceMcpForConfigRead } from "../../mcp/workspace-mcp-config.js";
 import {
   getAssistantMessageIdsInTurn,
   getConversation,
@@ -173,7 +168,6 @@ type LlmContextRouteResult = Omit<LlmContextNormalizationResult, "summary"> & {
 import {
   CODE_OWNED_PROFILE_NAMES,
   getEffectiveProfilesForProvider,
-  getUserSelectableProfilesForProvider,
   INVARIANT_PROFILE_NAMES,
   MANAGED_PROFILE_NAMES,
   resolveDefaultProfileForProvider,
@@ -541,6 +535,20 @@ const RawLlmWriteSliceSchema = z
   .passthrough();
 
 /**
+ * The `config_set` body. `value` is `z.unknown()` — deliberately wider than
+ * an object shape — because the CLI contract writes scalar values and
+ * explicit `null`s (`set heartbeat.activeHoursStart null` clears a key), so
+ * the value is any JSON at all; only its PRESENCE is required, which zod
+ * cannot express on an unknown leaf, so the handler keeps that domain check.
+ */
+const ConfigSetByKeyBodySchema = z
+  .object({
+    path: z.string().min(1),
+    value: z.unknown(),
+  })
+  .meta({ id: "ConfigSetByKeyRequest" });
+
+/**
  * Wire shape of the `memory` section in config responses. Passthrough
  * preserves fields beyond `enabled` and `v2` so the client doesn't strip
  * unrecognised memory config that newer daemons may add.
@@ -680,59 +688,17 @@ const ConfigGetResponseSchema = AssistantConfigSchema.pick({
 
 function handleGetConfig() {
   try {
-    // The overlays stamp wire-only state (catalog bodies, effective chat
-    // settings, capability flags) onto the returned object. Clone first so
-    // the loader's cached config — and every other `getConfig()` reader,
-    // including the config-write merge base — never sees the wire view.
-    const config = structuredClone(loadConfig());
-    overlayWorkspaceMcpForConfigRead(config);
-    overlayEffectiveProfilesForWire(config);
-    enrichProfilesForWire(config);
-    overlayChatSettingsForWire(config);
-    return config;
+    // The raw loaded config — this endpoint derives no wire view. Consumers
+    // of the old wire-only fields read them from their actual sources:
+    // effective profile bodies and their resolved capabilities from the
+    // profiles API (`GET` list), MCP servers from the MCP API (`GET` list,
+    // secrets stripped). `loadConfig()` never carries an `mcp` subtree —
+    // it is not an `AssistantConfigSchema` key — so nothing leaks here.
+    return loadConfig();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new InternalError(`Failed to read config: ${message}`);
   }
-}
-function overlayChatSettingsForWire(config: AssistantConfig): void {
-  const effective = getConfig();
-  config.conversations = {
-    ...config.conversations,
-    autoArchive: {
-      ...config.conversations?.autoArchive,
-      ...effective.conversations.autoArchive,
-    },
-  };
-  config.notifications = {
-    ...config.notifications,
-    newMessageEnabled: effective.notifications.newMessageEnabled,
-  };
-}
-
-/**
- * Replace `llm.profiles` in an outgoing config response with the effective
- * profile view (code-catalog default bodies + workspace overlays). Default
- * profile CONTENT is code-owned and the workspace holds at most a thin stub,
- * but clients (settings UI, sticky-profile pickers) need the full bodies to
- * render labels/models — so the wire view materializes them, resolved through
- * `llm.default`'s column of the intent × provider matrix so a BYO
- * install sees the provider/model that actually dispatches. Wire-only:
- * `normalizeCloudProfileWrites` reduces echoed bodies back to the
- * workspace-owned fields on the write paths, so a `config get` →
- * `config set` round-trip never persists catalog content — the two must
- * resolve through the same column or honest round-trips are rejected.
- *
- * The profiles come from one schema parse of the `llm` block being served
- * through the real `LLMSchema`, whose `isDefaultProviderChoice` clamp
- * shields the matrix lookup from a persisted value the matrix cannot
- * implement, which a raw read would feed straight into resolution.
- */
-function overlayEffectiveProfilesForWire(config: AssistantConfig): void {
-  const parsedLlm = LLMSchema.safeParse(config.llm);
-  config.llm.profiles = getUserSelectableProfilesForProvider(
-    parsedLlm.success ? parsedLlm.data : undefined,
-  );
 }
 
 /**
@@ -791,9 +757,9 @@ export function normalizeCloudProfileWrites(
       continue;
     }
 
-    // Must resolve through the same provider column as
-    // `overlayEffectiveProfilesForWire`, or an echo of the wire view would
-    // not match `effective` and an honest round-trip would be rejected.
+    // Must resolve through the same provider column as the effective view
+    // the profiles API serves, so a round-trip echo of an effective body
+    // strips instead of reading as a genuine edit.
     const resolved = resolveDefaultProfileForProvider(
       typedCurrent?.success ? typedCurrent.data : undefined,
       name,
@@ -876,53 +842,6 @@ export function normalizeCloudProfileWrites(
   }
 
   patch.llm = llm.data;
-}
-
-/**
- * The enriched profile shape clients consume: {@link ProfileEntry} plus the
- * wire-only flags `enrichProfilesForWire` stamps onto config-read responses.
- * The flags are deliberately absent from `ProfileEntry` — the persisted
- * schema — so a config write's schema parse strips echoed copies instead of
- * persisting them.
- */
-type WireProfileEntry = ProfileEntry & {
-  invariant?: boolean;
-  supportsVision?: boolean;
-};
-
-/**
- * Annotate each profile in `config.llm.profiles` with wire-only flags —
- * never persisted to disk:
- *
- * - `supportsVision`: resolved from the model catalog, with a profile
- *   `inputModalities.image` override winning when set. Unknown (provider,
- *   model) pairs with no override default to `true` (fail-open) so image
- *   upload remains available for custom / unlisted models.
- * - `invariant`: `true` for managed-source entries of the cloud profile
- *   names (`INVARIANT_PROFILE_NAMES`); absent otherwise. Source-gated to
- *   match `assertInvariantProfilesPreserved` — a user-owned profile sharing
- *   a cloud name is fully editable, so it must render as a normal custom
- *   profile.
- */
-function enrichProfilesForWire(config: AssistantConfig): void {
-  const profiles: Record<string, WireProfileEntry> = config.llm.profiles;
-  for (const [name, entry] of Object.entries(profiles)) {
-    if (INVARIANT_PROFILE_NAMES.has(name) && entry.source === "managed") {
-      entry.invariant = true;
-    }
-
-    if (entry.provider == null || entry.model == null) {
-      continue;
-    }
-
-    const catalogModel = catalogEntryFor(entry.provider, entry.model);
-    const catalogVision = catalogModel?.supportsVision;
-    const imageOverride = modalitiesOf({
-      inputModalities: entry.inputModalities,
-    })?.image;
-    entry.supportsVision =
-      resolveModalityOverride(imageOverride, catalogVision) ?? true;
-  }
 }
 
 /**
@@ -1442,20 +1361,18 @@ async function handleSetConfig(merged: AssistantConfig): Promise<void> {
  * {@link handleSetConfig} write.
  */
 async function handleSetConfigByKey({ body }: RouteHandlerArgs) {
-  const parsedBody = JsonRecordSchema.safeParse(body);
+  const parsedBody = ConfigSetByKeyBodySchema.safeParse(body);
   if (!parsedBody.success) {
     throw new BadRequestError(
       "Body must be a JSON object with `path` and `value`",
     );
   }
   const path = parsedBody.data.path;
-  if (typeof path !== "string" || path.length === 0) {
-    throw new BadRequestError("`path` must be a non-empty string");
-  }
   // `value` must be present (use explicit `null` to clear a key). Without
   // this check, `undefined` flows into `setNestedValue` and gets dropped by
   // `JSON.stringify` at save time, silently removing the key - which is
-  // distinct from the documented "set to null" semantics.
+  // distinct from the documented "set to null" semantics. zod cannot express
+  // "any value, but the key must exist", so this stays a domain check.
   if (!Object.hasOwn(parsedBody.data, "value")) {
     throw new BadRequestError(
       "`value` is required (use `null` to clear a key)",
@@ -1483,22 +1400,12 @@ async function handleSetConfigByKey({ body }: RouteHandlerArgs) {
     setNestedValue(patchShape, path, value);
     normalizeCloudProfileWrites(patchShape);
     rejectCloudProfileDeletion(patchShape);
-    const patchLlm = RawLlmWriteSliceSchema.safeParse(patchShape.llm);
-    if (patchLlm.success) {
-      if (pathSegments.length === 1) {
-        writtenValue = patchLlm.data;
-      } else if (pathSegments[1] === "profiles") {
-        if (pathSegments.length === 2) {
-          if (patchLlm.data.profiles) {
-            writtenValue = patchLlm.data.profiles;
-          }
-        } else if (pathSegments.length === 3) {
-          const normalized = patchLlm.data.profiles?.[pathSegments[2]!];
-          if (normalized !== undefined) {
-            writtenValue = normalized;
-          }
-        }
-      }
+    // The guards write the normalized llm slice back onto the patch shape
+    // (a zod parse copies), so the normalized value is read straight back
+    // at the written path.
+    const normalized = getNestedValue(patchShape, path);
+    if (normalized !== undefined) {
+      writtenValue = normalized;
     }
   }
   setNestedValue(merged, path, writtenValue);
@@ -2226,6 +2133,7 @@ export const ROUTES: RouteDefinition[] = [
       "(preserves explicit null, replaces object subtrees instead of merging). " +
       "Used by the `assistant config set <key> <value>` CLI command.",
     tags: ["config"],
+    requestBody: ConfigSetByKeyBodySchema,
     handler: handleSetConfigByKey,
   },
   {
