@@ -252,7 +252,9 @@
       "name": "@mycadet/web",
       "version": "0.12.8",
       "dependencies": {
+        "@capacitor/keyboard": "8.0.5",
         "@mycadet/assistant-ui": "workspace:*",
+        "@mycadet/environments": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/cli": "8.3.4",

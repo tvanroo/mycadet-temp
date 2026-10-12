@@ -16,7 +16,6 @@
     "lint": "eslint",
     "pretypecheck": "bun run openapi-ts",
     "typecheck": "bunx tsc --noEmit",
-    "postinstall": "bun run openapi-ts",
     "openapi-ts": "cd ../../packages/assistant-ui && bun run openapi-ts",
     "android:sync": "bunx --bun cap sync android",
     "android:run": "bun run scripts/run-android.ts",
@@ -28,7 +27,9 @@
     "test:ci": "bun scripts/run-tests.ts"
   },
   "dependencies": {
-    "@mycadet/assistant-ui": "workspace:*"
+    "@capacitor/keyboard": "8.0.5",
+    "@mycadet/assistant-ui": "workspace:*",
+    "@mycadet/environments": "workspace:*"
   },
   "devDependencies": {
     "@capacitor/cli": "8.3.4",
