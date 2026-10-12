@@ -30,8 +30,8 @@ const PAIRS: { canonical: string; targets: string[] }[] = [
       join(
         ROOT,
         "..",
-        "clients",
-        "web",
+        "packages",
+        "assistant-ui",
         "src",
         "lib",
         "feature-flags",
