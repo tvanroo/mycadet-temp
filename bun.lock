@@ -7,7 +7,7 @@
     },
     "assistant": {
       "name": "@mycadet/assistant",
-      "version": "0.12.9",
+      "version": "0.12.11",
       "bin": {
         "assistant": "./src/index.ts",
       },
@@ -100,7 +100,7 @@
     },
     "cli": {
       "name": "@mycadet/cli",
-      "version": "0.12.9",
+      "version": "0.12.11",
       "bin": {
         "cadet": "./src/index.ts",
       },
@@ -258,7 +258,7 @@
     },
     "clients/web": {
       "name": "@mycadet/web",
-      "version": "0.12.9",
+      "version": "0.12.11",
       "dependencies": {
         "@capacitor-community/camera-preview": "8.0.1",
         "@capacitor/android": "8.3.4",
@@ -406,7 +406,7 @@
     },
     "credential-executor": {
       "name": "@mycadet/credential-executor",
-      "version": "0.12.9",
+      "version": "0.12.11",
       "bin": {
         "credential-executor": "./src/main.ts",
         "ces": "./src/cli.ts",
@@ -429,7 +429,7 @@
     },
     "gateway": {
       "name": "@mycadet/gateway",
-      "version": "0.12.9",
+      "version": "0.12.11",
       "bin": {
         "gateway": "./src/cli/index.ts",
       },
@@ -2959,7 +2959,6 @@
     "lodash.isequal": ["lodash.isequal@4.5.0", "", {}, "sha512-pDo3lu8Jhfjqls6GkMgpahsF9kCyayhgykjyLMNFTKWrpVdAQtYyB4muAMWozBB4ig/dtWAmsMxLEI8wuz+DYQ=="],
 
     "log-symbols": ["log-symbols@4.1.0", "", { "dependencies": { "chalk": "^4.1.0", "is-unicode-supported": "^0.1.0" } }, "sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg=="],
-
 
     "long": ["long@5.3.2", "", {}, "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA=="],
 
