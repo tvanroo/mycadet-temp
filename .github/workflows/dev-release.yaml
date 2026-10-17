@@ -3,17 +3,6 @@ name: Dev Release
 on:
   # The cloud drives releases by dispatching this workflow.
   workflow_dispatch: {}
-  # Daily automated fire at 6:00 AM America/New_York. Cron is pinned to UTC
-  # while Eastern flips between EST (UTC-5) and EDT (UTC-4), so both
-  # wall-clock candidates are scheduled and the should-release gate keeps
-  # whichever firing IS 6 AM in New York on that day (the loser is a green
-  # no-op):
-  #   - 10:00 UTC = 6:00 AM EDT (summer)
-  #   - 11:00 UTC = 6:00 AM EST (winter)
-  schedule:
-    - cron: "0 10 * * *"
-    - cron: "0 11 * * *"
-
 concurrency:
   group: dev-release
   # Queue instead of cancel: the scheduled 6 AM fire must not kill an
