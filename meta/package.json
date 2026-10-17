@@ -1,6 +1,6 @@
 {
   "name": "mycadet",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "license": "MIT",
   "description": "Install the full Cadet stack locally",
   "bin": {
@@ -18,12 +18,12 @@
     "npm-shrinkwrap.json"
   ],
   "dependencies": {
-    "@mycadet/assistant": "0.13.0",
-    "@mycadet/cli": "0.13.0",
-    "@mycadet/credential-executor": "0.13.0",
-    "@mycadet/gateway": "0.13.0",
-    "@mycadet/app": "0.13.0",
-    "@mycadet/web": "0.13.0"
+    "@mycadet/assistant": "0.13.1",
+    "@mycadet/cli": "0.13.1",
+    "@mycadet/credential-executor": "0.13.1",
+    "@mycadet/gateway": "0.13.1",
+    "@mycadet/app": "0.13.1",
+    "@mycadet/web": "0.13.1"
   },
   "overrides": {
     "drizzle-orm": "0.45.2",

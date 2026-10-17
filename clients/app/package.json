@@ -1,6 +1,6 @@
 {
   "name": "@mycadet/app",
-  "version": "0.0.0",
+  "version": "0.13.1",
   "type": "module",
   "description": "Cadet account/client shell — portable package plus a standalone bundle for self-hosted edges",
   "license": "MIT",
