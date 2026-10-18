@@ -82,10 +82,10 @@ export function localModePlugin(env: Record<string, string>): Plugin {
   // The `/assistant/__config` document, also injected into the index. No
   // `assistantId`: the dev server fronts every assistant in the lockfile at
   // once, so it has no single identity to report the way an nginx edge does.
-  const configJson = JSON.stringify({
-    webUrl: config.webUrl,
-    cloudUrl: config.cloudUrl,
-  });
+  // No URLs either: the bundle resolves those from its baked environment
+  // (the launcher sets `VITE_ENVIRONMENT` in the dev server's env), and the
+  // non-empty object keeps the local-mode host detection alive.
+  const configJson = JSON.stringify({});
 
   return {
     name: "cadet-local-mode",

@@ -1,4 +1,4 @@
-import { getCloudRuntimeUrl } from "@/lib/cloud-runtime-url";
+import { currentCloudUrl } from "@/lib/client-environment";
 import type {
   PlatformStatusGetResponses,
   PlatformVerifycredentialPostResponses,
@@ -539,7 +539,7 @@ async function ensureLocalAssistantCloudIdentity(
     unstoredProvisionedKeys.set(assistant.assistantId, assistantApiKey);
   }
 
-  const cloudBaseUrl = status.baseUrl ?? getCloudRuntimeUrl();
+  const cloudBaseUrl = status.baseUrl ?? currentCloudUrl();
   try {
     await injectCloudCredentials(gateway, {
       assistantApiKey,

@@ -5,9 +5,12 @@ import {
   INGRESS_ASSISTANT_ID_KEY,
   INGRESS_LAST_TUNNEL_KEY,
   INGRESS_PAIRING_TUNNEL_KEY,
+  normalizeHttpPublicBaseUrlWithoutTrailingSlash,
+  parseTunnelRecord,
   type TunnelProviderName,
   type TunnelRecord,
 } from "@mycadet/service-contracts/ingress";
+import { z } from "zod";
 
 import {
   lookupAssistantByIdentifier,
@@ -111,6 +114,35 @@ export function loadRawConfig(workspaceDir: string): Record<string, unknown> {
     string,
     unknown
   >;
+}
+
+const IngressRecordSchema = z.looseObject({
+  publicBaseUrl: z.string().optional(),
+  lastTunnel: z.unknown().optional(),
+  pairingTunnel: z.unknown().optional(),
+});
+
+/**
+ * The public base URL recorded for this workspace's ingress — the address
+ * the nginx/tunnel edge is reachable from. Prefers the managed callback
+ * base (`publicBaseUrl`), then the most recent tunnel record, then the
+ * pairing tunnel (a temporary side-channel, kept last so a pairing-only run
+ * still yields an address). Undefined when no tunnel has ever run.
+ */
+export function readIngressPublicBaseUrl(
+  workspaceDir: string,
+): string | undefined {
+  const parsed = IngressRecordSchema.safeParse(
+    loadRawConfig(workspaceDir).ingress,
+  );
+  if (!parsed.success) {
+    return undefined;
+  }
+  const base =
+    parsed.data.publicBaseUrl ??
+    parseTunnelRecord(parsed.data.lastTunnel)?.publicBaseUrl ??
+    parseTunnelRecord(parsed.data.pairingTunnel)?.publicBaseUrl;
+  return normalizeHttpPublicBaseUrlWithoutTrailingSlash(base);
 }
 
 /** Write the workspace `config.json`, creating parent directories as needed. */

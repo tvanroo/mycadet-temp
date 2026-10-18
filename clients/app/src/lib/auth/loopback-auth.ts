@@ -1,4 +1,4 @@
-import { readInjectedConfig } from "@app/lib/injected-config";
+import { currentWebUrl } from "@app/lib/client-environment";
 
 /**
  * Loopback authentication for local-mode web UI.
@@ -11,13 +11,8 @@ import { readInjectedConfig } from "@app/lib/injected-config";
  * its cloud proxy can authenticate — no browser session cookie is used.
  */
 
-const FALLBACK_WEB_URL = "https://www.mycadet.ai";
 const LOOPBACK_STATE_KEY = "cadet:loopback:state";
 const LOOPBACK_RETURN_TO_KEY = "cadet:loopback:returnTo";
-
-function getLocalConfig(): { webUrl: string } {
-  return { webUrl: readInjectedConfig()?.webUrl || FALLBACK_WEB_URL };
-}
 
 function generateState(): string {
   const array = new Uint8Array(32);
@@ -26,14 +21,14 @@ function generateState(): string {
 }
 
 export function isPlatformLocal(): boolean {
-  return getLocalConfig().webUrl === window.location.origin;
+  return currentWebUrl() === window.location.origin;
 }
 
 export async function startLoopbackAuth(
   returnTo?: string,
   options?: { intent?: string },
 ): Promise<void> {
-  const { webUrl } = getLocalConfig();
+  const webUrl = currentWebUrl();
   const state = generateState();
   const port = window.location.port || "3000";
 

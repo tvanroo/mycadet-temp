@@ -16,7 +16,7 @@ import type { RemoteWebPairingTokenResult } from "@/lib/auth/remote-gateway-sess
 
 let cloudRemote = false;
 let injectedAssistantName: string | undefined;
-let injectedHubUrl: string | undefined;
+let servedGatewayRuntime = false;
 let nativePlatform = false;
 let nativePlatformName: "ios" | "android" = "ios";
 const nativeSwitchToOriginPathMock = mock(
@@ -26,7 +26,7 @@ const nativeSwitchToOriginPathMock = mock(
 mock.module("@/lib/local-mode", () => ({
   isCadetCloudRemote: () => cloudRemote,
   getRemoteGatewayAssistantName: () => injectedAssistantName,
-  getRemoteGatewayHubUrl: () => injectedHubUrl,
+  isServedGatewayRuntime: () => servedGatewayRuntime,
 }));
 
 mock.module("@/runtime/native-auth", () => ({
@@ -126,7 +126,7 @@ afterEach(() => {
   cleanup();
   cloudRemote = false;
   injectedAssistantName = undefined;
-  injectedHubUrl = undefined;
+  servedGatewayRuntime = false;
   nativePlatform = false;
   nativePlatformName = "ios";
   setUserAgent(ORIGINAL_USER_AGENT);
@@ -171,7 +171,9 @@ describe("RemoteWebPairingPage", () => {
   });
 
   test("cancel leaves the origin for the hub chooser", async () => {
-    injectedHubUrl = "https://hub.example.com/assistant";
+    // The hub origin is this bundle's environment seed (production under
+    // test — no VITE_ENVIRONMENT baked); the edge no longer injects it.
+    servedGatewayRuntime = true;
     const assignMock = mock((_url: string) => {});
     const originalAssign = window.location.assign;
     Object.defineProperty(window.location, "assign", {
@@ -195,7 +197,7 @@ describe("RemoteWebPairingPage", () => {
       // pairing guard, so cancelling must cross to the hub's own origin.
       await waitFor(() => {
         expect(assignMock.mock.calls[0]?.[0]).toBe(
-          "https://hub.example.com/account/select-assistant?noAutoSkip=1",
+          "https://mycadet.ai/account/select-assistant?noAutoSkip=1",
         );
       });
     } finally {
@@ -207,7 +209,7 @@ describe("RemoteWebPairingPage", () => {
   });
 
   test("cancel uses the native origin switch when available", async () => {
-    injectedHubUrl = "https://hub.example.com/assistant";
+    servedGatewayRuntime = true;
     nativePlatform = true;
     nativeSwitchToOriginPathMock.mockResolvedValueOnce(true);
     const assignMock = mock((_url: string) => {});
@@ -245,7 +247,7 @@ describe("RemoteWebPairingPage", () => {
   });
 
   test("cancel falls back when the native shell lacks path switching", async () => {
-    injectedHubUrl = "https://hub.example.com/assistant";
+    servedGatewayRuntime = true;
     nativePlatform = true;
     const assignMock = mock((_url: string) => {});
     const originalAssign = window.location.assign;
@@ -272,7 +274,7 @@ describe("RemoteWebPairingPage", () => {
           "account/select-assistant?noAutoSkip=1",
         );
         expect(assignMock.mock.calls[0]?.[0]).toBe(
-          "https://hub.example.com/account/select-assistant?noAutoSkip=1",
+          "https://mycadet.ai/account/select-assistant?noAutoSkip=1",
         );
       });
     } finally {
@@ -283,8 +285,8 @@ describe("RemoteWebPairingPage", () => {
     }
   });
 
-  test("cancel is hidden when the served config names no hub", async () => {
-    injectedHubUrl = undefined;
+  test("cancel is hidden off the remote-gateway runtime", async () => {
+    servedGatewayRuntime = false;
 
     render(
       <MemoryRouter

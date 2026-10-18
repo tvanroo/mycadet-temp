@@ -56,8 +56,8 @@ mock.module("@/lib/auth/request-headers", () => ({
   buildCadetMutatingHeaders: buildCadetMutatingHeadersMock,
 }));
 
-mock.module("@/lib/cloud-runtime-url", () => ({
-  getCloudRuntimeUrl: () => CONFIG_PLATFORM_BASE_URL,
+mock.module("@/lib/client-environment", () => ({
+  currentCloudUrl: () => CONFIG_PLATFORM_BASE_URL,
 }));
 mock.module("@/lib/local-mode", () => ({
   getActiveAssistant: () => activeAssistant,

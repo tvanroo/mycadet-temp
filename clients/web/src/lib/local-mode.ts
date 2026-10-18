@@ -101,15 +101,6 @@ export function getRemoteAssistantDisplayName(): string | undefined {
 }
 
 /**
- * The cloud hub SPA's assistant-root URL (`<origin>/assistant`), when the
- * served remote-gateway config carries one. Older served configs omit it, so
- * callers must tolerate `undefined`.
- */
-export function getRemoteGatewayHubUrl(): string | undefined {
-  return nonEmptyString(readInjectedConfig()?.hubUrl);
-}
-
-/**
  * Whether this bundle is served by a cadet's gateway itself (a self-hosted
  * edge or a docker cadet) rather than running beside a local host or on the
  * cloud platform. The serving gateway synthesizes the single "self" assistant

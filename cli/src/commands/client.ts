@@ -62,6 +62,7 @@ import {
 } from "@mycadet/local-mode";
 import { parseAssistantTargetArg } from "../lib/assistant-target-args.js";
 import { parseFeatureFlagArgs, readAmbientFlagEnvVars } from "../lib/flag-args";
+import { getCurrentEnvironment } from "../lib/environments/resolve.js";
 import {
   fetchOrganizationId,
   fetchCloudAssistants,
@@ -1300,13 +1301,14 @@ async function spawnBackgroundWebInterface(
  * id for the same reason). An id here would be the launch-time one, and a probe
  * for any other assistant this origin serves would read it as a mismatch and
  * report a false `foreign`. An absent id is deliberately benign to the probe.
+ *
+ * It carries no URLs either: bundles resolve `cloudUrl`/`webUrl` from their
+ * baked environment (the `@mycadet/environments` seeds, exactly like this CLI
+ * resolves its own) — never from injection. The object stays (empty) so the
+ * probe contract and the flag-overrides anchor keep one shape.
  */
-export function buildWebInterfaceConfig(opts: {
-  webUrl: string;
-  cloudUrl: string;
-}): Record<string, unknown> {
-  const { webUrl, cloudUrl } = opts;
-  return { webUrl, cloudUrl };
+export function buildWebInterfaceConfig(): Record<string, unknown> {
+  return {};
 }
 
 async function runWebInterface(
@@ -1345,10 +1347,9 @@ async function runWebInterface(
 
   const rawIndexHtml = await Bun.file(path.join(distDir, "index.html")).text();
   const cloudUrl = getCloudUrl();
-  const webUrl = getWebUrl();
   const safeJson = (v: unknown) =>
     JSON.stringify(v).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
-  const configJson = safeJson(buildWebInterfaceConfig({ webUrl, cloudUrl }));
+  const configJson = safeJson(buildWebInterfaceConfig());
   const hasOverrides = Object.keys(parsedFlagOverrides).length > 0;
   const flagOverridesSnippet = hasOverrides
     ? `;window.__CADET_FLAG_OVERRIDES__=${safeJson(parsedFlagOverrides)}`
@@ -1555,6 +1556,7 @@ async function runViteDevServer(
       ...(disableCloud ? { VITE_CADET_DISABLE_CLOUD: "true" } : {}),
       VITE_CLOUD_MODE: "false",
       VITE_WEB_MODE: "full",
+      VITE_ENVIRONMENT: getCurrentEnvironment().name,
       API_PROXY_TARGET: cloudUrl,
       CADET_WEB_URL: getWebUrl(),
       CADET_CLOUD_URL: cloudUrl,

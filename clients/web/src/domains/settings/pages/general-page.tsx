@@ -36,12 +36,13 @@ import {
 import { remoteGatewayPublicBaseUrl } from "@/lib/auth/remote-gateway-session";
 import {
   getRemoteAssistantDisplayName,
-  getRemoteGatewayHubUrl,
   getSelectedAssistant,
   isLocalAssistant,
   isLocalClient,
   isCadetCloudRemote,
 } from "@/lib/local-mode";
+import { currentEnvironment } from "@/lib/client-environment";
+import { cloudAssistantHubUrl } from "@mycadet/environments/seeds";
 import { isElectron } from "@/runtime/is-electron";
 import { useIsNativeMobile } from "@/runtime/platform-detection";
 import { useIsAuthenticated } from "@/stores/auth-store";
@@ -132,12 +133,11 @@ export function GeneralPage() {
     healthz?.version ?? assistant?.current_release_version ?? null;
 
   const openAssistantChooser = () => {
-    const hubUrl = getRemoteGatewayHubUrl();
-    if (!isCadetCloudRemote() && !isNativeMobile && hubUrl) {
+    if (!isCadetCloudRemote() && !isNativeMobile) {
       // Self-registration handoff: landing on the hub chooser records this
-      // origin in the hub's remembered list. `hubUrl` is the hub SPA's
-      // assistant root (`<origin>/assistant`), so the absolute chooser route
-      // hangs off its origin.
+      // origin in the hub's remembered list. The hub's URL is a pure function
+      // of this bundle's baked environment, so the absolute chooser route
+      // hangs off the environment's web origin.
       const params = new URLSearchParams({
         register: remoteGatewayPublicBaseUrl(),
       });
@@ -145,7 +145,9 @@ export function GeneralPage() {
       if (assistantName) {
         params.set("name", assistantName);
       }
-      const hubOrigin = new URL(hubUrl).origin;
+      const hubOrigin = new URL(
+        cloudAssistantHubUrl(currentEnvironment()),
+      ).origin;
       window.location.assign(
         `${hubOrigin}${routes.selectAssistant}?${params.toString()}`,
       );

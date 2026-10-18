@@ -93,15 +93,13 @@ test("Electron mutations carry native token and renderer origin without CSRF", a
       auth: { getSessionToken: () => "session123" },
     },
   });
-  Object.defineProperty(window, "__CADET_CONFIG__", {
-    configurable: true,
-    value: { cloudUrl: "https://cloud.example.com" },
-  });
   fetchSpy.mockResolvedValueOnce(new Response('{"data":{"user":{}}}'));
   await submitProviderSignup({ email: "a@example.com", username: "ada" });
   expect(fetchSpy).toHaveBeenCalledTimes(1);
+  // The Electron cloud origin is this bundle's environment seed
+  // (production under test — no VITE_ENVIRONMENT baked).
   expect(fetchSpy.mock.calls[0]?.[0]).toBe(
-    "https://cloud.example.com/_allauth/app/v1/auth/provider/signup",
+    "https://cloud.mycadet.ai/_allauth/app/v1/auth/provider/signup",
   );
   const headers = new Headers(fetchSpy.mock.calls[0]?.[1]?.headers);
   expect(headers.get("X-Session-Token")).toBe("session123");

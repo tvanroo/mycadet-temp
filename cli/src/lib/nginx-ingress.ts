@@ -36,6 +36,7 @@ import {
   isLocalContainerEntry,
   loadRawConfig,
   parseGatewayPortFromEntryUrls,
+  readIngressPublicBaseUrl,
   readShellMode,
   saveRawConfig,
 } from "./ingress-config.js";
@@ -189,8 +190,9 @@ export interface RemoteWebIngressOptions {
    *  confirm which assistant an edge is fronting. Absent in older served
    *  configs. */
   assistantId?: string;
-  /** Cloud web SPA base the remote client can hand this origin to (see
-   *  `cloudAssistantHubUrl`). Absent in older served configs. */
+  /** Public base URL this edge is reachable through (the tunnel's address,
+   *  read from the workspace `ingress` record). Absent until a tunnel has
+   *  run. */
   hubUrl?: string;
 }
 
@@ -406,7 +408,6 @@ const AssistantHostConfigSchema = z.object({
   assistantId: z.string().min(1).optional(),
   assistantName: z.string().optional(),
   version: z.string().min(1).optional(),
-  hubUrl: z.string().url().optional(),
   appAllowedOrigins: z.array(z.string().url()).default([]),
 });
 
@@ -420,10 +421,13 @@ function assistantHostConfig(config: Record<string, unknown>) {
 
 function appOrigins(config: Record<string, unknown>): string[] {
   const metadata = assistantHostConfig(config);
-  const origins = [
-    ...metadata.appAllowedOrigins,
-    ...(metadata.hubUrl ? [new URL(metadata.hubUrl).origin] : []),
-  ];
+  // The platform web origin is where the cloud hub lives for this CLI's
+  // environment; the served config's `hubUrl` names THIS edge's own public
+  // address now, so it no longer feeds the allowlist.
+  const platformOrigin = new URL(
+    cloudAssistantHubUrl(getCurrentEnvironment().name),
+  ).origin;
+  const origins = [...metadata.appAllowedOrigins, platformOrigin];
   return [...new Set(origins)].map((origin) => {
     const url = new URL(origin);
     if (
@@ -1273,7 +1277,7 @@ export async function startRemoteWebIngress(opts: {
   // reuse decision and the actual spawn share one value and cannot drift.
   const spaOptions = includeWebApp
     ? {
-        hubUrl: cloudAssistantHubUrl(getCurrentEnvironment().name),
+        hubUrl: readIngressPublicBaseUrl(opts.workspaceDir),
         ...(opts.assistantName ? { assistantName: opts.assistantName } : {}),
         ...(opts.assistantId ? { assistantId: opts.assistantId } : {}),
       }

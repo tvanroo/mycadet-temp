@@ -35,7 +35,7 @@ import { client as cloudClient } from "@/generated/api/client.gen";
 import { client as authClient } from "@/generated/auth/client.gen";
 import { client as daemonClient } from "@/generated/daemon/client.gen";
 import { client as gatewayClient } from "@/generated/gateway/client.gen";
-import { getCloudRuntimeUrl } from "@/lib/cloud-runtime-url";
+import { currentCloudUrl } from "@/lib/client-environment";
 import { ensureCsrfCookie, getCsrfToken } from "@/lib/auth/csrf";
 import {
   clearGatewayToken,
@@ -1281,7 +1281,7 @@ for (const apiClient of [
 }
 
 authClient.setConfig({
-  baseUrl: getCloudRuntimeUrl(),
+  baseUrl: currentCloudUrl(),
   credentials: "include",
 });
 

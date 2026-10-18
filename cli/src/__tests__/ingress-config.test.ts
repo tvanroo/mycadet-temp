@@ -16,6 +16,7 @@ import type { AssistantEntry } from "../lib/assistant-config.js";
 import {
   clearIngressUrl,
   parseGatewayPortFromEntryUrls,
+  readIngressPublicBaseUrl,
   readLockfileIngressUrl,
   saveIngressUrl,
   savePairingTunnel,
@@ -314,5 +315,39 @@ describe("parseGatewayPortFromEntryUrls", () => {
       } as AssistantEntry),
     ).toBeUndefined();
     expect(parseGatewayPortFromEntryUrls(undefined)).toBeUndefined();
+  });
+});
+
+describe("readIngressPublicBaseUrl", () => {
+  test("prefers the managed base, then the last tunnel, then the pairing tunnel", () => {
+    const ws = makeWorkspace();
+    expect(readIngressPublicBaseUrl(ws)).toBeUndefined();
+
+    savePairingTunnel(ws, {
+      provider: "tailscale",
+      publicBaseUrl: "https://pairing.example.ts.net",
+    });
+    expect(readIngressPublicBaseUrl(ws)).toBe("https://pairing.example.ts.net");
+
+    saveIngressUrl(ws, "https://tunnel.example.ts.net", undefined, "tailscale");
+    expect(readIngressPublicBaseUrl(ws)).toBe("https://tunnel.example.ts.net");
+  });
+
+  test("survives a teardown that clears only the managed base", () => {
+    const ws = makeWorkspace();
+    saveIngressUrl(ws, "https://tunnel.example.ts.net", undefined, "ngrok");
+    clearIngressUrl(ws);
+    // `lastTunnel` survives teardown on purpose (readers name the tunnel to
+    // restart), so the edge's address answer degrades to it.
+    expect(readIngressPublicBaseUrl(ws)).toBe("https://tunnel.example.ts.net");
+  });
+
+  test("an absent or malformed section reads as no address", () => {
+    const ws = makeWorkspace();
+    writeFileSync(
+      join(ws, "config.json"),
+      JSON.stringify({ ingress: { publicBaseUrl: 42 } }),
+    );
+    expect(readIngressPublicBaseUrl(ws)).toBeUndefined();
   });
 });

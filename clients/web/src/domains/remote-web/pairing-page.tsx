@@ -19,9 +19,11 @@ import {
 } from "@/lib/auth/remote-gateway-session";
 import {
   getRemoteGatewayAssistantName,
-  getRemoteGatewayHubUrl,
   isCadetCloudRemote,
+  isServedGatewayRuntime,
 } from "@/lib/local-mode";
+import { currentEnvironment } from "@/lib/client-environment";
+import { cloudAssistantHubUrl } from "@mycadet/environments/seeds";
 import { isNativePlatform } from "@/runtime/native-auth";
 import { isAndroidBrowser, isIOSBrowser } from "@/runtime/platform-detection";
 import { nativeSwitchToOriginPath } from "@/runtime/self-hosted-servers";
@@ -182,22 +184,20 @@ function buildAppHandoffUrl(
 }
 
 /**
- * The hub's chooser on its own origin, or `null` when the served config names
- * no hub. Abandoning a pairing has to leave this origin: the chooser sits
+ * The hub's chooser on its own origin, or `null` off the remote-gateway
+ * runtime — a dev-server pairing session has no hub handoff to make. The
+ * hub's URL is a pure function of this bundle's baked environment; the
+ * edge's injected `hubUrl` now names the edge itself, not the hub.
+ * Abandoning a pairing has to leave this origin: the chooser sits
  * behind `requireRemoteGatewayPairing`, which bounces an unauthenticated visit
  * straight back here and mints a fresh code. `noAutoSkip` keeps the hub on the
  * chooser instead of skipping through a lone assistant.
  */
 function hubChooserUrl(): string | null {
-  const hubUrl = getRemoteGatewayHubUrl();
-  if (!hubUrl) {
+  if (!isServedGatewayRuntime()) {
     return null;
   }
-  try {
-    return `${new URL(hubUrl).origin}${routes.selectAssistant}?noAutoSkip=1`;
-  } catch {
-    return null;
-  }
+  return `${new URL(cloudAssistantHubUrl(currentEnvironment())).origin}${routes.selectAssistant}?noAutoSkip=1`;
 }
 
 /**

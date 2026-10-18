@@ -14,14 +14,8 @@ import { AssistantPage } from "@app/shell/assistant-page";
 import { assistantSelectionState } from "@app/assistant/assistant-selection";
 
 const request = spyOn(globalThis, "fetch");
-const originalConfig = Object.getOwnPropertyDescriptor(
-  window,
-  "__CADET_CONFIG__",
-);
+const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
 const routers: ReturnType<typeof createMemoryRouter>[] = [];
-const host = {
-  cloudUrl: "https://host.example/admin/proxy/",
-};
 const detail = {
   id: "assistant-2",
   status: "active",
@@ -34,9 +28,9 @@ function setup(
     | { pathname: string; state: unknown } = "/account/select-assistant",
   useAccountRoute = false,
 ) {
-  Object.defineProperty(window, "__CADET_CONFIG__", {
+  Object.defineProperty(window, "location", {
     configurable: true,
-    value: host,
+    value: { origin: "https://host.example/" },
   });
   const router = createMemoryRouter(
     [
@@ -60,10 +54,8 @@ afterEach(() => {
     router.dispose();
   }
   request.mockReset();
-  if (originalConfig) {
-    Object.defineProperty(window, "__CADET_CONFIG__", originalConfig);
-  } else {
-    Reflect.deleteProperty(window, "__CADET_CONFIG__");
+  if (originalLocation) {
+    Object.defineProperty(window, "location", originalLocation);
   }
 });
 afterAll(() => request.mockRestore());
@@ -82,14 +74,14 @@ test("the account route lists names and IDs, then resolves only the selected ifr
   fireEvent.click(screen.getByRole("button", { name: "assistant-2" }));
   const frame = await screen.findByTitle("Assistant");
   expect(frame.getAttribute("src")).toBe(
-    "https://host.example/admin/proxy/web/1.2.3/assistant/",
+    "https://host.example/web/1.2.3/assistant/",
   );
   expect(router.state.location.state).toEqual(
-    assistantSelectionState("assistant-2", host),
+    assistantSelectionState("assistant-2"),
   );
   expect(request.mock.calls.map(([url]) => String(url))).toEqual([
-    "https://host.example/admin/proxy/v1/assistants/?limit=100&offset=0",
-    "https://host.example/admin/proxy/v1/assistants/assistant-2/",
+    "https://host.example/v1/assistants/?limit=100&offset=0",
+    "https://host.example/v1/assistants/assistant-2/",
   ]);
   expect(request.mock.calls[0][1]?.credentials).toBe("include");
 });
@@ -162,7 +154,7 @@ test("browser history restores selection and frame navigation retains it", async
   request.mockResolvedValueOnce(Response.json(detail));
   const router = setup({
     pathname: "/assistant/files",
-    state: assistantSelectionState("assistant-2", host),
+    state: assistantSelectionState("assistant-2"),
   });
   const frame = await screen.findByTitle("Assistant");
   if (!(frame instanceof HTMLIFrameElement)) {
@@ -184,7 +176,7 @@ test("browser history restores selection and frame navigation retains it", async
   });
   expect(router.state.location.pathname).toBe("/assistant/settings");
   expect(router.state.location.state).toEqual(
-    assistantSelectionState("assistant-2", host),
+    assistantSelectionState("assistant-2"),
   );
   expect(request).toHaveBeenCalledTimes(1);
 });

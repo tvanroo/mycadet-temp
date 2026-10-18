@@ -5,10 +5,7 @@ function useLocation(origin: string, port: string) {
   const location = { origin, port, href: origin };
   // Model only the host capabilities consumed by this handoff; navigation
   // should record the URL without initiating a document load in happy-dom.
-  Reflect.set(globalThis, "window", {
-    location,
-    __CADET_CONFIG__: { webUrl: "https://cloud.example" },
-  });
+  Reflect.set(globalThis, "window", { location });
   return location;
 }
 afterEach(() => {
@@ -26,7 +23,9 @@ test("loopback persists a fresh state and destination and sends only the callbac
     "/assistant/checkout?package=super",
   );
   const target = new URL(location.href);
-  expect(target.origin).toBe("https://cloud.example");
+  // The login target is this bundle's environment seed (production under
+  // test — no VITE_ENVIRONMENT baked), not an injected URL.
+  expect(target.origin).toBe("https://mycadet.ai");
   expect(target.pathname).toBe("/account/signup");
   expect(target.searchParams.get("returnTo")).toBe(
     `/accounts/cli/callback?port=4567&state=${firstState}`,
@@ -35,7 +34,7 @@ test("loopback persists a fresh state and destination and sends only the callbac
   expect(sessionStorage.getItem("cadet:loopback:state")).not.toBe(firstState);
   expect(new URL(location.href).pathname).toBe("/account/login");
 });
-test("a platform served on the same origin bypasses cloud loopback", () => {
-  useLocation("https://cloud.example", "");
+test("a platform served on its environment's own origin bypasses cloud loopback", () => {
+  useLocation("https://mycadet.ai", "");
   expect(isPlatformLocal()).toBe(true);
 });

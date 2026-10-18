@@ -11,6 +11,7 @@
  */
 
 import { isElectron } from "@/runtime/is-electron";
+import { currentWebUrl } from "@/lib/client-environment";
 import { WWW_DOMAIN } from "@/utils/domains";
 
 const r = <const T extends string>(path: T): T => path;
@@ -589,10 +590,7 @@ export function docsUrl(path: string): string {
 /** URL for the cloud-hosted admin UI. */
 export function adminUrl(): string {
   if (isElectron()) {
-    const config = (
-      window as unknown as { __CADET_CONFIG__?: { webUrl?: string } }
-    ).__CADET_CONFIG__;
-    return `${config?.webUrl ?? window.location.origin}${routes.admin.root}`;
+    return `${currentWebUrl()}${routes.admin.root}`;
   }
   if (import.meta.env.DEV) {
     return `${LOCAL_ADMIN_ORIGIN}${routes.admin.root}`;

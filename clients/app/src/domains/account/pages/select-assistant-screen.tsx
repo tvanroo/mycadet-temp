@@ -3,17 +3,14 @@ import { AccountShell } from "@app/components/account/account-shell";
 import { AccountHeading } from "@app/components/account/account-form";
 import { Button } from "@mycadet/design-library/components/button";
 import { useTranslation } from "@app/i18n";
-import { readInjectedConfig } from "@app/lib/injected-config";
 import { useAssistantRequest } from "@app/assistant/use-assistant-request";
 import { assistantSelectionState } from "@app/assistant/assistant-selection";
 import { routes } from "@app/utils/routes";
 
 export function SelectAssistantScreen() {
   const { t } = useTranslation("account");
-  const config = readInjectedConfig();
   const navigate = useNavigate();
   const { state, retry } = useAssistantRequest({
-    apiBaseUrl: config?.cloudUrl,
     origin: window.location.origin,
     listOnly: true,
   });
@@ -34,7 +31,7 @@ export function SelectAssistantScreen() {
               variant="outlined"
               onClick={() => {
                 void navigate(routes.assistant, {
-                  state: assistantSelectionState(assistant.id, config ?? {}),
+                  state: assistantSelectionState(assistant.id),
                 });
               }}
             >

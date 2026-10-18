@@ -46,10 +46,6 @@ test("Electron configuration uses the host cloud origin and current session toke
     configurable: true,
     value: { platform: "electron", auth: { getSessionToken: () => token } },
   });
-  Object.defineProperty(window, "__CADET_CONFIG__", {
-    configurable: true,
-    value: { cloudUrl: "https://cloud.example.com" },
-  });
   fetchSpy.mockImplementation(
     Object.assign(
       async () =>
@@ -58,8 +54,10 @@ test("Electron configuration uses the host cloud origin and current session toke
     ),
   );
   expect((await getAuthConfig()).ok).toBe(true);
+  // The Electron cloud origin is this bundle's environment seed
+  // (production under test — no VITE_ENVIRONMENT baked).
   expect(fetchSpy.mock.calls[0]?.[0]).toBe(
-    "https://cloud.example.com/_allauth/app/v1/config",
+    "https://cloud.mycadet.ai/_allauth/app/v1/config",
   );
   expect(
     new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("X-Session-Token"),

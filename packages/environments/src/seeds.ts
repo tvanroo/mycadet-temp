@@ -61,6 +61,32 @@ export function cloudAssistantHubUrl(envName: string | undefined): string {
  * "Coexisting environments" design doc. Until then, a call site that needs a
  * new environment must add it here and rebuild.
  */
+/** The deployment environments baked into the built-in seeds. */
+export type EnvironmentName =
+  | "production"
+  | "staging"
+  | "test"
+  | "dev"
+  | "local";
+
+/** Whether `value` names one of the built-in seed environments. */
+export function isEnvironmentName(value: unknown): value is EnvironmentName {
+  return typeof value === "string" && Object.hasOwn(SEEDS, value);
+}
+
+/**
+ * Resolve a client bundle's deployment environment from its bake-time
+ * signal. Vite statically replaces `import.meta.env.VITE_ENVIRONMENT` at
+ * build time (the dev release train bakes `dev`; production builds bake
+ * `production` or leave it unset), mirroring how the CLI resolves its URLs
+ * from its own environment. Unknown values fall back to production.
+ */
+export function clientEnvironmentName(
+  baked: string | undefined,
+): EnvironmentName {
+  return isEnvironmentName(baked) ? baked : "production";
+}
+
 export const SEEDS: Record<string, EnvironmentDefinition> = {
   production: {
     name: "production",

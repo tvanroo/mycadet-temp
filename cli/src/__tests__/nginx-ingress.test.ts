@@ -1,5 +1,11 @@
 import * as childProcess from "node:child_process";
 import { createHash } from "node:crypto";
+
+import {
+  loadRawConfig,
+  saveIngressUrl,
+  saveRawConfig,
+} from "../lib/ingress-config.js";
 import * as fsModule from "node:fs";
 import {
   existsSync,
@@ -142,6 +148,10 @@ afterEach(() => {
 function makeWorkspace(): string {
   const dir = mkdtempSync(join(tmpdir(), "cadet-ingress-test-"));
   workspaces.push(dir);
+  // The edge stamps its own public address from the workspace's recorded
+  // ingress URL, so every fixture workspace records one (via the real
+  // writer) for the served-config pins below.
+  saveIngressUrl(dir, EDGE_PUBLIC_URL);
   return dir;
 }
 
@@ -534,10 +544,13 @@ describe("buildRemoteWebIndexHtml", () => {
 
 describe("nginx ingress process state", () => {
   function writeIngressState(workspaceDir: string, listenPort: number): void {
-    writeFileSync(
-      join(workspaceDir, "config.json"),
-      JSON.stringify({ ingress: { nginx: { listenPort } } }) + "\n",
-    );
+    const config = loadRawConfig(workspaceDir);
+    const ingress = config.ingress;
+    config.ingress = {
+      ...(typeof ingress === "object" && ingress !== null ? ingress : {}),
+      nginx: { listenPort },
+    };
+    saveRawConfig(workspaceDir, config);
   }
 
   function writePidFile(workspaceDir: string, pid: number): void {
@@ -765,25 +778,24 @@ function mockRunningEdge(
   },
 ): number {
   const pid = 123_460;
-  writeFileSync(
-    join(ws, "config.json"),
-    JSON.stringify({
-      ingress: {
-        nginx: {
-          listenPort: opts.listenPort,
-          ...(opts.includeWebApp === undefined
-            ? {}
-            : { includeWebApp: opts.includeWebApp }),
-          ...(opts.gatewayPort === undefined
-            ? {}
-            : { gatewayPort: opts.gatewayPort }),
-          ...(opts.remoteWebConfigHash === undefined
-            ? {}
-            : { remoteWebConfigHash: opts.remoteWebConfigHash }),
-        },
-      },
-    }) + "\n",
-  );
+  const config = loadRawConfig(ws);
+  const ingress = config.ingress;
+  config.ingress = {
+    ...(typeof ingress === "object" && ingress !== null ? ingress : {}),
+    nginx: {
+      listenPort: opts.listenPort,
+      ...(opts.includeWebApp === undefined
+        ? {}
+        : { includeWebApp: opts.includeWebApp }),
+      ...(opts.gatewayPort === undefined
+        ? {}
+        : { gatewayPort: opts.gatewayPort }),
+      ...(opts.remoteWebConfigHash === undefined
+        ? {}
+        : { remoteWebConfigHash: opts.remoteWebConfigHash }),
+    },
+  };
+  saveRawConfig(ws, config);
   const dir = join(ws, "data", "ingress");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "nginx.pid"), `${pid}\n`);
@@ -828,7 +840,7 @@ function locationBlocks(
   return blocks;
 }
 
-const PRODUCTION_HUB_URL = "https://mycadet.ai/assistant";
+const EDGE_PUBLIC_URL = "https://tunnel.example.com";
 
 /**
  * Mirror of the SPA config fingerprint the edge records in its ingress state
@@ -855,7 +867,7 @@ function spaConfigHash(
           apiBaseUrl: "/v1",
           ...(opts.assistantName ? { assistantName: opts.assistantName } : {}),
           ...(opts.assistantId ? { assistantId: opts.assistantId } : {}),
-          hubUrl: PRODUCTION_HUB_URL,
+          hubUrl: EDGE_PUBLIC_URL,
         },
         webDistDir: opts.webDistDir ?? findWebDistDir(),
         version: "1.2.3",
@@ -1034,7 +1046,7 @@ describe("startRemoteWebIngress", () => {
         remoteWebIngress: {
           webDistDir,
           indexHtmlPath: join(ws, "data", "ingress", "assistant-index.html"),
-          hubUrl: PRODUCTION_HUB_URL,
+          hubUrl: EDGE_PUBLIC_URL,
         },
       }),
     );
@@ -1046,7 +1058,7 @@ describe("startRemoteWebIngress", () => {
       "utf-8",
     );
     expect(indexHtml).toContain('"remote":"custom"');
-    expect(indexHtml).toContain(`"hubUrl":"${PRODUCTION_HUB_URL}"`);
+    expect(indexHtml).toContain(`"hubUrl":"${EDGE_PUBLIC_URL}"`);
     // No assistant name was provided, so the served config omits the label.
     expect(indexHtml).not.toContain("assistantName");
     expect(readConfig(ws).ingress?.nginx).toEqual({
@@ -1115,7 +1127,7 @@ describe("startRemoteWebIngress", () => {
       "utf-8",
     );
     expect(indexHtml).toContain('"assistantName":"My Homelab"');
-    expect(indexHtml).toContain(`"hubUrl":"${PRODUCTION_HUB_URL}"`);
+    expect(indexHtml).toContain(`"hubUrl":"${EDGE_PUBLIC_URL}"`);
     const conf = realFs.readFileSync(ingressConfPath(ws), "utf-8");
     expect(conf).toContain('\\"assistantName\\":\\"My Homelab\\"');
   });
@@ -1450,7 +1462,7 @@ describe("startRemoteWebIngress", () => {
           config: {
             remote: "custom",
             apiBaseUrl: "/v1",
-            hubUrl: PRODUCTION_HUB_URL,
+            hubUrl: EDGE_PUBLIC_URL,
           },
         }),
       )
@@ -1872,7 +1884,7 @@ describe("ensureTunnelEdge", () => {
     );
     expect(indexHtml).toContain('"assistantName":"Homelab"');
     expect(indexHtml).toContain(`"assistantId":"${ASSISTANT_ID}"`);
-    expect(indexHtml).toContain(`"hubUrl":"${PRODUCTION_HUB_URL}"`);
+    expect(indexHtml).toContain(`"hubUrl":"${EDGE_PUBLIC_URL}"`);
   });
 
   test("omits the assistant label when the lockfile has no matching entry", async () => {
@@ -1894,7 +1906,7 @@ describe("ensureTunnelEdge", () => {
     );
     expect(indexHtml).not.toContain("assistantName");
     expect(indexHtml).toContain(`"assistantId":"${ASSISTANT_ID}"`);
-    expect(indexHtml).toContain(`"hubUrl":"${PRODUCTION_HUB_URL}"`);
+    expect(indexHtml).toContain(`"hubUrl":"${EDGE_PUBLIC_URL}"`);
   });
 
   test("reuses a running edge that already serves the SPA mode", async () => {
@@ -2476,7 +2488,7 @@ function appConfigHash(
           apiBaseUrl: "/v1",
           ...(opts.assistantName ? { assistantName: opts.assistantName } : {}),
           ...(opts.assistantId ? { assistantId: opts.assistantId } : {}),
-          hubUrl: PRODUCTION_HUB_URL,
+          hubUrl: EDGE_PUBLIC_URL,
         },
         webDistDir: findWebDistDir(),
         version: "1.2.3",
