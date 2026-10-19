@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { cliCommand } from "../lib/cli-name.js";
 import { createReadStream, existsSync, statSync } from "fs";
 import { createInterface } from "readline";
 import { watch } from "fs";
@@ -26,7 +27,7 @@ interface LogsArgs {
 }
 
 function printHelp(): void {
-  console.log("Usage: cadet logs [<name>] [options]");
+  console.log(`Usage: ${cliCommand()} logs [<name>] [options]`);
   console.log("");
   console.log("View logs from an assistant instance.");
   console.log("");

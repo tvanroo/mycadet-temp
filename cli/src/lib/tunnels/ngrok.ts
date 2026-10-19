@@ -144,7 +144,7 @@ export function ngrokOnlineEndpoint(output: string): string | null {
 }
 
 /** The host of an endpoint URL named in an ngrok error, if parseable. */
-function endpointHost(endpoint: string): string | null {
+export function endpointHost(endpoint: string): string | null {
   try {
     return new URL(endpoint).hostname;
   } catch {
@@ -656,6 +656,51 @@ async function stopUntrackedNgrokAgent(pid: number | null): Promise<boolean> {
 }
 
 /**
+ * The pid of the live ngrok agent holding the given domain, for a caller
+ * OUTSIDE the spawn loop — the detached tunnel process has no TTY, so the
+ * foreground `cadet tunnel` command is where a confirm-first stop can ask.
+ * A tracked agent comes from the lockfile record; an untracked one is
+ * identified through its own inspection API plus the verified ngrok process
+ * behind that port. Returns null when no live holder can be identified.
+ */
+export async function ngrokHolderPid(
+  domainHost: string,
+  matchesPid: (pid: number) => boolean = isNgrokProcess,
+): Promise<number | null> {
+  const tracked = staleTrackedNgrokAgent(
+    readRootProcesses().tunnel,
+    matchesPid,
+  );
+  if (tracked) return tracked.pid;
+  return untrackedNgrokHolderPid(
+    await discoverNgrokAgents(),
+    domainHost,
+    matchesPid,
+  );
+}
+
+/**
+ * Stop the holder pid once the user confirmed it: verify it still names an
+ * ngrok process (PID reuse guard), signal it, and drop the lockfile record
+ * when it is the one being stopped. The caller asks first — this only runs
+ * after a yes came back.
+ */
+export async function stopNgrokHolderPid(
+  pid: number,
+  matchesPid: (pid: number) => boolean = isNgrokProcess,
+): Promise<boolean> {
+  try {
+    if (!matchesPid(pid)) return false;
+    if (!(await stopProcess(pid, "tunnel ngrok agent"))) return false;
+  } catch {
+    return false;
+  }
+  const record = readRootProcesses().tunnel;
+  if (record?.pid === pid) clearRootProcess("tunnel", pid);
+  return true;
+}
+
+/**
  * Matches the adoption line the tunnel workflows print when they find an
  * already-running tunnel, so the detached-tunnel supervisor can detect
  * adoption without this module's implementation details leaking into the
@@ -929,6 +974,7 @@ export async function maybeStartNgrokTunnel(
         provider: "ngrok",
         startedAt: new Date().toISOString(),
         assistantId,
+        publicUrl,
       });
     }
     console.log(`   Tunnel established: ${publicUrl}`);
@@ -1263,6 +1309,7 @@ export async function runNgrokTunnel(
         provider: "ngrok",
         startedAt: new Date().toISOString(),
         assistantId: opts.assistantId,
+        publicUrl,
       });
     }
     if (opts.domain) {

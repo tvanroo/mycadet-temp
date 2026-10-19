@@ -1,4 +1,5 @@
 import { existsSync } from "fs";
+import { cliCommand } from "../lib/cli-name.js";
 import { join } from "path";
 
 import { isCloudHome } from "../lib/cloud-values.js";
@@ -68,7 +69,7 @@ export const exec = Object.assign(
     rawArgs.length === 0
   ) {
     console.log(
-      "Usage: cadet exec [<name>] [--service <svc>] [-it] -- <command...>",
+      `Usage: ${cliCommand()} exec [<name>] [--service <svc>] [-it] -- <command...>`,
     );
     console.log("");
     console.log("Execute a command inside an assistant's container.");
@@ -99,10 +100,10 @@ export const exec = Object.assign(
     console.log("  credential-executor");
     console.log("");
     console.log("Examples:");
-    console.log("  cadet exec -- ls -la /workspace");
-    console.log("  cadet exec -- cat /workspace/NOW.md");
-    console.log("  cadet exec -it -- /bin/bash");
-    console.log("  cadet exec --service gateway -- cat /tmp/gateway.log");
+    console.log(`  ${cliCommand()} exec -- ls -la /workspace`);
+    console.log(`  ${cliCommand()} exec -- cat /workspace/NOW.md`);
+    console.log(`  ${cliCommand()} exec -it -- /bin/bash`);
+    console.log(`  ${cliCommand()} exec --service gateway -- cat /tmp/gateway.log`);
     process.exit(0);
   }
 
@@ -110,7 +111,7 @@ export const exec = Object.assign(
     console.error(
       red(
         "Error: missing '--' separator before command.\n" +
-          "Usage: cadet exec [<name>] -- <command...>",
+          `Usage: ${cliCommand()} exec [<name>] -- <command...>`,
       ),
     );
     process.exit(1);

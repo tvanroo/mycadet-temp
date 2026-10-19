@@ -24,13 +24,21 @@ import {
 } from "./nginx-ingress.js";
 import { waitForDaemonReady } from "./http-client.js";
 import {
+  confirmStopAnswer,
+  endpointHost,
   hasWebhookIntegrations,
   IngressConfigSchema,
+  isNgrokEndpointOnlineError,
+  loadNgrokDomain,
   maybeStartNgrokTunnel,
+  ngrokHolderPid,
+  ngrokOnlineEndpoint,
   NGROK_TUNNEL_META,
   NGROK_PROVIDER,
   saveNgrokDomain,
+  stopNgrokHolderPid,
 } from "./tunnels/ngrok.js";
+import { readLineText } from "./ensure-binary.js";
 import { shellArg } from "./shell-arg.js";
 import { notifyGatewayOfPublicUrl } from "./tunnels/gateway-notify.js";
 import {
@@ -53,6 +61,49 @@ import {
  * default, at which point only this constant flips.
  */
 export const DEFAULT_TUNNEL_PROVIDER: TunnelProviderName = "ngrok";
+
+/**
+ * Confirm-first heal for a held ngrok domain, run by the FOREGROUND `cadet
+ * tunnel` command: the detached tunnel process has no TTY, so its #402/#406
+ * prompt can never fire — a 334 there surfaces here instead, in the
+ * terminal that ran the command. When the startup log shows the collision
+ * and the holder can be identified (tracked record, or inspection API +
+ * verified pid), ask before stopping it; an unverified process is never
+ * touched. Returns whether the caller should relaunch the tunnel.
+ */
+export async function offerStopNgrokHolder(logText: string): Promise<boolean> {
+  if (!isNgrokEndpointOnlineError(logText)) return false;
+  if (!("isTTY" in process.stdin && process.stdin.isTTY)) return false;
+  const endpoint = ngrokOnlineEndpoint(logText);
+  const holderHost =
+    (endpoint ? endpointHost(endpoint) : null) ?? loadNgrokDomain();
+  if (!holderHost) return false;
+  const pid = await ngrokHolderPid(holderHost);
+  if (pid === null) return false;
+  console.error(
+    `\nngrok refused the tunnel: ${endpoint ?? holderHost} is already online.`,
+  );
+  console.error(
+    `An ngrok agent from an earlier run (pid ${pid}) is holding your free ngrok domain.`,
+  );
+  const answer = await readLineText(
+    "Stop the other ngrok tunnel and start a new one pointing at this installation? [Y/n] ",
+  );
+  if (!confirmStopAnswer(answer)) {
+    console.error(
+      "Keeping the other ngrok agent. Stop it yourself (its terminal, or `pkill ngrok`) and re-run this command.",
+    );
+    return false;
+  }
+  if (!(await stopNgrokHolderPid(pid))) {
+    console.error(
+      `Could not stop the old ngrok agent (pid ${pid}). Stop it yourself and re-run this command.`,
+    );
+    return false;
+  }
+  console.log("Stopped the old ngrok agent. Retrying the tunnel...");
+  return true;
+}
 
 /** Per-provider copy `cadet tunnel`'s help renders. */
 export interface ProviderMeta {

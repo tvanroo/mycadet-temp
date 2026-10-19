@@ -1,4 +1,5 @@
 import { resolveAssistant } from "../lib/assistant-config.js";
+import { cliCommand } from "../lib/cli-name.js";
 import {
   leaseGuardianToken,
   loadGuardianToken,
@@ -144,7 +145,7 @@ export const setup = Object.assign(
   const args = process.argv.slice(3);
 
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("Usage: cadet setup [--provider <provider>]");
+    console.log(`Usage: ${cliCommand()} setup [--provider <provider>]`);
     console.log("");
     console.log("Configure a provider API key on the active assistant.");
     console.log("");
@@ -159,9 +160,9 @@ export const setup = Object.assign(
     console.log("  - Otherwise prompts securely without echoing the key.");
     console.log("");
     console.log("Examples:");
-    console.log("  cadet setup");
-    console.log("  ANTHROPIC_API_KEY=... cadet setup");
-    console.log("  cadet setup --provider openai");
+    console.log(`  ${cliCommand()} setup`);
+    console.log(`  ANTHROPIC_API_KEY=... ${cliCommand()} setup`);
+    console.log(`  ${cliCommand()} setup --provider openai`);
     process.exit(0);
   }
 

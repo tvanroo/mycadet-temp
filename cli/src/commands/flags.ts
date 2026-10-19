@@ -1,4 +1,5 @@
 import { extractAssistantFlag } from "../lib/arg-utils.js";
+import { cliCommand } from "../lib/cli-name.js";
 import { AssistantClient } from "../lib/assistant-client.js";
 import {
   formatAssistantLookupError,
@@ -63,7 +64,7 @@ function printFlagTable(flags: FeatureFlagEntry[]): void {
 }
 
 function printHelp(): void {
-  console.log("Usage: cadet flags [subcommand] [options]");
+  console.log(`Usage: ${cliCommand()} flags [subcommand] [options]`);
   console.log("");
   console.log("Show and toggle feature flags for the active assistant.");
   console.log(
@@ -224,7 +225,7 @@ export const flags = Object.assign(
   if (subcommand === "get") {
     const key = args[1];
     if (!key) {
-      console.error("Usage: cadet flags get <key>");
+      console.error(`Usage: ${cliCommand()} flags get <key>`);
       process.exit(1);
     }
     await getFlag(key, assistantName);
@@ -235,7 +236,7 @@ export const flags = Object.assign(
     const key = args[1];
     const rawValue = args[2];
     if (!key || rawValue === undefined) {
-      console.error("Usage: cadet flags set <key> <true|false>");
+      console.error(`Usage: ${cliCommand()} flags set <key> <true|false>`);
       process.exit(1);
     }
     if (rawValue !== "true" && rawValue !== "false") {

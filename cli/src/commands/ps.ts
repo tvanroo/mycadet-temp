@@ -1,4 +1,5 @@
 import { getNginxIngressPort } from "../lib/nginx-ingress.js";
+import { cliCommand } from "../lib/cli-name.js";
 import { isCloudHome } from "../lib/cloud-values.js";
 import { join } from "path";
 
@@ -829,7 +830,7 @@ export const ps = Object.assign(
   async function ps(): Promise<void> {
     const args = process.argv.slice(3);
     if (args.includes("--help") || args.includes("-h")) {
-      console.log("Usage: cadet ps [<name-or-id>] [--verbose]");
+      console.log(`Usage: ${cliCommand()} ps [<name-or-id>] [--verbose]`);
       console.log("");
       console.log(
         "List all assistants, or show processes for a specific assistant.",

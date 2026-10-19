@@ -1,7 +1,8 @@
 import { gatewayToken } from "./gateway/token.js";
+import { cliCommand } from "../lib/cli-name.js";
 
 function printUsage(): void {
-  console.log("Usage: cadet gateway <subcommand>");
+  console.log(`Usage: ${cliCommand()} gateway <subcommand>`);
   console.log("");
   console.log("Gateway management commands.");
   console.log("");

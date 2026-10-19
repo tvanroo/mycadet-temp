@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "fs";
+import { cliCommand } from "../lib/cli-name.js";
 import { join } from "path";
 
 import {
@@ -66,7 +67,7 @@ export const sleep = Object.assign(
   async function sleep(): Promise<void> {
   const args = process.argv.slice(3);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("Usage: cadet sleep [<name> | --all] [--force] [--wait [<duration>]]");
+    console.log(`Usage: ${cliCommand()} sleep [<name> | --all] [--force] [--wait [<duration>]]`);
     console.log("");
     console.log("Gracefully stop all services; abort if they do not exit without forced termination.");
     console.log("");
@@ -196,7 +197,7 @@ class SleepExit extends Error {
 async function sleepAll(opts: SleepOptions): Promise<void> {
   const entries = loadAllAssistants();
   if (entries.length === 0) {
-    console.error("Error: no assistants found. Run 'cadet hatch' first.");
+    console.error(`Error: no assistants found. Run '${cliCommand()} hatch' first.`);
     process.exit(1);
   }
 

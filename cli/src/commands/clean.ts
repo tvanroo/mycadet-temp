@@ -1,11 +1,12 @@
 import { detectOrphanedProcesses } from "../lib/orphan-detection";
+import { cliCommand } from "../lib/cli-name.js";
 import { stopProcess } from "../lib/process";
 
 export const clean = Object.assign(
   async function clean(): Promise<void> {
   const args = process.argv.slice(3);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("Usage: cadet clean");
+    console.log(`Usage: ${cliCommand()} clean`);
     console.log("");
     console.log(
       "Kill all orphaned cadet processes that are not tracked by any assistant.",

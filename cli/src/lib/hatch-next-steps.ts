@@ -1,12 +1,4 @@
-import { getCurrentEnvironment } from "./environments/resolve.js";
-
-function cliCommand(): string {
-  // Production keeps the bare `cadet` binary; every non-production
-  // environment installs as `cadet-<env>` (the same rule as the config and
-  // state dirs — see environments/paths.ts).
-  const env = getCurrentEnvironment();
-  return env.name === "production" ? "cadet" : `cadet-${env.name}`;
-}
+import { cliCommand } from "./cli-name.js";
 
 export function logHatchNextSteps(log: (message: string) => void): void {
   const command = cliCommand();

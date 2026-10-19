@@ -1,4 +1,5 @@
 import { resolveExistingLocalSigningKey } from "@mycadet/local-mode";
+import { cliCommand } from "../lib/cli-name.js";
 import { isCloudHome } from "../lib/cloud-values.js";
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -116,7 +117,7 @@ function parseArgs(): UpgradeArgs {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") {
-      console.log("Usage: cadet upgrade [<name>] [options]");
+      console.log(`Usage: ${cliCommand()} upgrade [<name>] [options]`);
       console.log("");
       console.log("Upgrade an assistant to a newer version.");
       console.log("To roll back to a previous version, use `cadet restore` with a backup.");

@@ -20,15 +20,16 @@ import {
   getDefaultWorkspaceDir,
   isLocalContainerEntry,
   parseGatewayPortFromEntryUrls,
+  readLockfileIngressUrl,
   saveShellMode,
 } from "../lib/ingress-config.js";
+import { ensureBinaryInstalled, readLineText } from "../lib/ensure-binary.js";
 import {
   ensureTunnelEdge,
   formatEdgeMode,
   getNginxVersion,
   type TunnelEdge,
 } from "../lib/nginx-ingress.js";
-import { ensureBinaryInstalled } from "../lib/ensure-binary.js";
 import { STALE_CLI_UPDATE_HINT } from "../lib/stale-cli-hint.js";
 import {
   ADOPTED_TUNNEL_RE,
@@ -38,11 +39,18 @@ import {
   cadetTunnelComingSoonError,
   clearReservedDomain,
   hasWebhookIntegrationsConfigured,
+  offerStopNgrokHolder,
   providerSupportsReservedDomain,
   runProviderTunnel,
   stopTunnelProcess,
   summarizeStartupFailure,
 } from "../lib/tunnel.js";
+import {
+  confirmStopAnswer,
+  ngrokHolderPid,
+  stopNgrokHolderPid,
+} from "../lib/tunnels/ngrok.js";
+import { cliCommand } from "../lib/cli-name.js";
 
 // The accepted `--provider` values ARE the shared registry, so validation
 // here cannot drift from what the workspace config accepts.
@@ -70,11 +78,13 @@ function parseArgs(): TunnelArgs {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") {
       console.log(
-        "Usage: cadet tunnel [<name>] --provider <provider> [options]\n       cadet tunnel stop [<name>]",
+        `Usage: ${cliCommand()} tunnel [<name>] --provider <provider> [options]\n       ${cliCommand()} tunnel stop [<name>]`,
       );
       console.log("");
       console.log("Front a locally running assistant with an HTTPS tunnel.");
-      console.log("The tunnel URL is saved to the workspace config as the ingress base URL.");
+      console.log(
+        "The tunnel URL is saved to the workspace config as the ingress base URL.",
+      );
       console.log("");
       console.log(
         "How far that URL reaches depends on the provider; omit --provider for",
@@ -128,7 +138,9 @@ function parseArgs(): TunnelArgs {
       console.log(
         "                                /web/assistant/. Saved to the workspace config so `cadet wake`",
       );
-      console.log("                                restores it; changing it restarts the nginx edge.");
+      console.log(
+        "                                restores it; changing it restarts the nginx edge.",
+      );
       console.log(
         `  --foreground                  Stream the tunnel's logs to this terminal. By default the tunnel`,
       );
@@ -170,8 +182,10 @@ function parseArgs(): TunnelArgs {
           `  $ cadet tunnel --provider ${DEFAULT_TUNNEL_PROVIDER} --clear-domain`,
         );
       }
-      console.log("  $ cadet tunnel --provider cloudflare");
-      console.log("  $ cadet tunnel my-assistant --provider tailscale");
+      console.log(`  $ ${cliCommand()} tunnel --provider cloudflare`);
+      console.log(
+        `  $ ${cliCommand()} tunnel my-assistant --provider tailscale`,
+      );
       process.exit(0);
     } else if (arg === "--provider") {
       const next = args[i + 1];
@@ -399,60 +413,107 @@ async function spawnDetachedTunnel(): Promise<void> {
   let publicUrl: string | undefined;
   let adopted = false;
 
-  const { child, logPath, ready, exitCode } = await relaunchDetached({
-    args: childArgs,
-    logFile: "tunnel.log",
-    timeoutMs: TUNNEL_BACKGROUND_START_TIMEOUT_MS,
-    isReady: (logPath) => {
+  // One confirm-first round for a held ngrok domain: the detached child has
+  // no TTY, so the prompt inside its own spawn loop can never fire — the
+  // heal can only happen HERE, in the terminal that ran the command.
+  for (let holderStops = 0; ; holderStops++) {
+    const { child, logPath, ready, exitCode } = await relaunchDetached({
+      args: childArgs,
+      logFile: "tunnel.log",
+      timeoutMs: TUNNEL_BACKGROUND_START_TIMEOUT_MS,
+      isReady: (logPath) => {
+        let logText = "";
+        try {
+          logText = readFileSync(logPath, "utf-8");
+        } catch {
+          // Log file not written yet. Keep polling.
+        }
+        const established = TUNNEL_ESTABLISHED_RE.exec(logText);
+        if (established) {
+          publicUrl = established[1];
+          return true;
+        }
+        const adoptedMatch = ADOPTED_TUNNEL_RE.exec(logText);
+        if (adoptedMatch) {
+          publicUrl = adoptedMatch[1];
+          adopted = true;
+          return true;
+        }
+        return false;
+      },
+    });
+
+    if (exitCode !== undefined) {
       let logText = "";
       try {
         logText = readFileSync(logPath, "utf-8");
       } catch {
-        // Log file not written yet. Keep polling.
+        // Log file not readable — the summary falls back to none.
       }
-      const established = TUNNEL_ESTABLISHED_RE.exec(logText);
-      if (established) {
-        publicUrl = established[1];
-        return true;
+      if (holderStops < 1 && (await offerStopNgrokHolder(logText))) {
+        adopted = false;
+        publicUrl = undefined;
+        continue;
       }
-      const adoptedMatch = ADOPTED_TUNNEL_RE.exec(logText);
-      if (adoptedMatch) {
-        publicUrl = adoptedMatch[1];
-        adopted = true;
-        return true;
-      }
-      return false;
-    },
-  });
-
-  if (exitCode !== undefined) {
-    let logText = "";
-    try {
-      logText = readFileSync(logPath, "utf-8");
-    } catch {
-      // Log file not readable — the summary falls back to none.
+      const reason = summarizeStartupFailure(logText);
+      console.error(
+        `Error (${exitCode ?? "unknown"}): tunnel process exited during startup${reason ? `: ${reason}` : "."}`,
+      );
+      console.error(`Logs: ${logPath}`);
+      process.exit(1);
     }
-    const reason = summarizeStartupFailure(logText);
-    console.error(
-      `Error (${exitCode ?? "unknown"}): tunnel process exited during startup${reason ? `: ${reason}` : "."}`,
-    );
-    console.error(`Logs: ${logPath}`);
-    process.exit(1);
-  }
 
-  if (!ready) {
-    console.log(
-      `Tunnel is still starting up after ${TUNNEL_BACKGROUND_START_TIMEOUT_MS / 1000}s. Check progress: ${logPath}`,
+    if (!ready) {
+      console.log(
+        `Tunnel is still starting up after ${TUNNEL_BACKGROUND_START_TIMEOUT_MS / 1000}s. Check progress: ${logPath}`,
+      );
+    } else if (publicUrl) {
+      console.log(`Tunnel established: ${publicUrl}`);
+    }
+    console.log(`Running in background (pid ${child.pid}). Logs: ${logPath}`);
+    if (adopted) {
+      console.log(adoptedTunnelStopNotice(child.pid));
+    } else {
+      console.log(`Stop with: ${cliCommand()} tunnel stop`);
+    }
+    return;
+  }
+}
+
+/**
+ * No lockfile tunnel record — but an untracked ngrok agent may still hold
+ * the environment's tunnel. When the saved ingress URL's domain is served
+ * by a live, pid-verified ngrok agent, ask before stopping it: the command
+ * is an explicit stop request, but the process is not ours to take down
+ * silently. Returns whether the stop went through.
+ */
+async function offerStopUntrackedNgrokHolder(
+  assistantId: string | undefined,
+): Promise<boolean> {
+  if (!assistantId) return false;
+  const ingressUrl = readLockfileIngressUrl(assistantId);
+  if (!ingressUrl) return false;
+  let host: string | null = null;
+  try {
+    host = new URL(ingressUrl).hostname;
+  } catch {
+    return false;
+  }
+  const pid = await ngrokHolderPid(host);
+  if (pid === null) return false;
+  console.log(
+    `No Cadet-managed tunnel is recorded, but an ngrok agent (pid ${pid}) is serving ${ingressUrl}.`,
+  );
+  const answer = await readLineText("Stop it? [Y/n] ");
+  if (!confirmStopAnswer(answer)) return false;
+  if (!(await stopNgrokHolderPid(pid))) {
+    console.error(
+      `Could not stop the ngrok agent (pid ${pid}). Stop it yourself and re-run this command.`,
     );
-  } else if (publicUrl) {
-    console.log(`Tunnel established: ${publicUrl}`);
+    return false;
   }
-  console.log(`Running in background (pid ${child.pid}). Logs: ${logPath}`);
-  if (adopted) {
-    console.log(adoptedTunnelStopNotice(child.pid));
-  } else {
-    console.log("Stop with: cadet tunnel stop");
-  }
+  console.log("Tunnel stopped. nginx and the saved domain are unchanged.");
+  return true;
 }
 
 export const tunnel = Object.assign(
@@ -460,18 +521,24 @@ export const tunnel = Object.assign(
     if (process.argv[3] === "stop") {
       const args = process.argv.slice(4);
       if (args.includes("--help") || args.includes("-h")) {
-        console.log("Usage: cadet tunnel stop [<name>]");
+        console.log(`Usage: ${cliCommand()} tunnel stop [<name>]`);
         console.log(
           "Stop the recorded Cadet-managed tunnel, keeping nginx and the saved domain.",
         );
         return;
       }
       if (args.some((arg) => arg.startsWith("-")))
-        throw new Error("Usage: cadet tunnel stop [<name>]");
+        throw new Error(`Usage: ${cliCommand()} tunnel stop [<name>]`);
       const { entry, workspaceDir } = resolveLocalTunnelTarget(
         args.join(" ") || null,
       );
       if (!readRootProcesses().tunnel) {
+        // No recorded tunnel — but an untracked ngrok agent may still hold
+        // the environment's tunnel: started before root-process tracking
+        // existed, or adopted and cleared while it stayed alive. When the
+        // saved ingress URL's domain is served by a live, pid-verified ngrok
+        // agent, ask before stopping it.
+        if (await offerStopUntrackedNgrokHolder(entry.assistantId)) return;
         console.log(
           "No Cadet-managed tunnel is recorded. Externally started tunnels must be stopped directly.",
         );

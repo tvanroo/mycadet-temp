@@ -3,6 +3,7 @@ import {
   resolveExistingLocalSigningKey,
 } from "@mycadet/local-mode";
 import { join } from "path";
+import { cliCommand } from "../lib/cli-name.js";
 
 import {
   getDaemonPidPath,
@@ -52,7 +53,7 @@ export const wake = Object.assign(
   async function wake(): Promise<void> {
   const args = process.argv.slice(3);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("Usage: cadet wake [<name> | --all] [options]");
+    console.log(`Usage: ${cliCommand()} wake [<name> | --all] [options]`);
     console.log("");
     console.log("Start the assistant and gateway processes.");
     console.log("");
@@ -147,7 +148,7 @@ export const wake = Object.assign(
 async function wakeAll(opts: { watch: boolean }): Promise<void> {
   const entries = loadAllAssistants();
   if (entries.length === 0) {
-    console.error("Error: no assistants found. Run 'cadet hatch' first.");
+    console.error(`Error: no assistants found. Run '${cliCommand()} hatch' first.`);
     process.exit(1);
   }
 

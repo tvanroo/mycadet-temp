@@ -156,6 +156,8 @@ export interface RootProcessRecord {
   startedAt: string;
   /** Listening port for the nginx edge. */
   port?: number;
+  /** The public URL the tunnel agent serves; "tunnel" entries only. */
+  publicUrl?: string;
   /** Managed process temporarily displaced by a pairing-only tunnel. */
   previous?: RootProcessRecord;
 }
