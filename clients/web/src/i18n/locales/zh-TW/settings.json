@@ -1634,8 +1634,7 @@
     "dark": "深色",
     "light": "淺色",
     "system": "系統",
-    "title": "佈景主題",
-    "velvet": "絲絨"
+    "title": "佈景主題"
   },
   "tierPicker": {
     "machineAriaLabel": "機器層級",

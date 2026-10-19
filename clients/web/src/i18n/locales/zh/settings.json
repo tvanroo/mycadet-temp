@@ -1634,8 +1634,7 @@
     "dark": "深色",
     "light": "浅色",
     "system": "系统",
-    "title": "主题",
-    "velvet": "丝绒"
+    "title": "主题"
   },
   "tierPicker": {
     "machineAriaLabel": "机器层级",

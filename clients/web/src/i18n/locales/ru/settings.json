@@ -1639,8 +1639,7 @@
     "dark": "Тёмная",
     "light": "Светлая",
     "system": "Системная",
-    "title": "Тема",
-    "velvet": "Velvet"
+    "title": "Тема"
   },
   "tierPicker": {
     "machineAriaLabel": "Уровень машины",

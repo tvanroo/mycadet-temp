@@ -7,7 +7,7 @@ import { readStoredThemePreference } from "@/utils/theme-preferences";
 export function useNativeLaunchScreenReady(): void {
   useEffect(() => {
     void markNativeLaunchScreenReady(
-      readStoredThemePreference({ velvetEnabled: true }),
+      readStoredThemePreference(),
     );
   }, []);
 }

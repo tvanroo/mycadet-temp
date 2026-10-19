@@ -1,11 +1,10 @@
-import { Heart, Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 import { cn, SegmentControl } from "@mycadet/design-library";
 
 import { useTranslation } from "@/i18n";
 import { type ThemePreference } from "@/utils/theme-preferences";
 import { useThemePreference } from "@/hooks/use-theme-preference";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 
 /**
  * Compact icon-only theme switcher for the sidebar preferences popover.
@@ -13,10 +12,10 @@ import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
  * `useThemePreference` hook so they stay in sync via the `watchDeviceSetting`
  * listener.
  *
- * Every segment carries a tooltip of its label, which non-obvious options
- * (Velvet's Heart) need. The design library mounts those only where the device
- * can hover, so a touch user is never left with a label a tap put up and
- * nothing takes down. The `aria-label` carries the same text either way.
+ * Every segment carries a tooltip of its label. The design library mounts
+ * those only where the device can hover, so a touch user is never left with a
+ * label a tap put up and nothing takes down. The `aria-label` carries the same
+ * text either way.
  */
 export function ThemeToggle({ className }: { className?: string } = {}) {
   const { t } = useTranslation();
@@ -32,16 +31,7 @@ export function ThemeToggle({ className }: { className?: string } = {}) {
     { value: "dark", label: t("themeToggle.dark"), Icon: Moon },
   ];
 
-  const themeOptions = useClientFeatureFlagStore.use.velvet()
-    ? [
-        ...baseThemeOptions,
-        {
-          value: "velvet" as const,
-          label: t("themeToggle.velvet"),
-          Icon: Heart,
-        },
-      ]
-    : baseThemeOptions;
+  const themeOptions = baseThemeOptions;
 
   return (
     <div

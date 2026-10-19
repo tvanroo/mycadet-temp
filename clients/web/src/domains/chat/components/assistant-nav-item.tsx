@@ -53,7 +53,6 @@ import {
 } from "@/components/sidebar-nav-geometry";
 import { useCommandShortcutHint } from "@/hooks/use-command-shortcut";
 import { useAssistantAvatar } from "@/hooks/use-assistant-avatar";
-import { useInChatOnboardingStore } from "@/stores/in-chat-onboarding-store";
 import { eyeStyleBaseWidth } from "@/utils/assistant-eyes";
 import { toneForBg } from "@/utils/avatar-tone";
 
@@ -223,10 +222,6 @@ export function AssistantNavItem({
     accentHex: hex,
   } = useAssistantAvatar(assistantId);
   const reduce = useReducedMotion();
-  // While the onboarding tour owns the nav rows (flooding them with its own
-  // eyes treatment), this component's eyes and its loop stay completely
-  // suppressed and the assistant row drains to a plain nav item.
-  const navTourActive = useInChatOnboardingStore.use.navTourActive();
   /* Drives the collapsed rail's pulse only. The expanded row's eyes hold still,
      so nothing there subscribes to these controls and the loop leaves them
      alone while the rail is open. */
@@ -253,15 +248,6 @@ export function AssistantNavItem({
   const eyesHeight = eye ? eyesWidth * (eye.bbox.h / eye.bbox.w) : 0;
 
   useEffect(() => {
-    if (navTourActive) {
-      /* Snap back to rest so a tour starting mid-pulse doesn't strand the
-         sprite grown. Guarded, as every controls call here is: only the
-         collapsed tile subscribes to them. */
-      if (collapsed) {
-        eyesControls.set({ scale: 1 });
-      }
-      return;
-    }
     if (reduce) {
       return;
     }

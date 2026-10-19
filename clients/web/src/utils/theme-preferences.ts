@@ -1,33 +1,22 @@
 import { getDeviceSetting, setDeviceSetting } from "@/utils/device-settings";
 
-export type ThemePreference = "system" | "light" | "dark" | "velvet";
-
-interface NormalizeThemeOptions {
-  velvetEnabled: boolean;
-  disabledVelvetFallback?: Exclude<ThemePreference, "velvet">;
-}
+export type ThemePreference = "system" | "light" | "dark";
 
 function normalizeThemePreference(
   value: string | null | undefined,
-  { velvetEnabled, disabledVelvetFallback = "dark" }: NormalizeThemeOptions,
 ): ThemePreference {
   if (value === "light" || value === "dark" || value === "system") {
     return value;
   }
-  if (value === "velvet") {
-    return velvetEnabled ? "velvet" : disabledVelvetFallback;
-  }
   return "system";
 }
 
-export function readStoredThemePreference(
-  options: NormalizeThemeOptions,
-): ThemePreference {
+export function readStoredThemePreference(): ThemePreference {
   if (typeof window === "undefined") {
     return "system";
   }
   const raw = getDeviceSetting("theme", "");
-  return normalizeThemePreference(raw || null, options);
+  return normalizeThemePreference(raw || null);
 }
 
 export function writeStoredThemePreference(theme: ThemePreference): void {
@@ -42,25 +31,16 @@ export function applyThemePreference(theme: ThemePreference): void {
   const prefersDark =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const isVelvet = theme === "velvet";
-  const shouldBeDark =
-    isVelvet || theme === "dark" || (theme === "system" && prefersDark);
+  const shouldBeDark = theme === "dark" || (theme === "system" && prefersDark);
 
   const root = document.documentElement;
-  root.setAttribute(
-    "data-theme",
-    isVelvet ? "velvet" : shouldBeDark ? "dark" : "light",
-  );
+  root.setAttribute("data-theme", shouldBeDark ? "dark" : "light");
   root.classList.toggle("dark", shouldBeDark);
-  root.classList.toggle("velvet", isVelvet);
 }
 
 export function getEffectiveThemePreference(
   theme: ThemePreference,
-): "light" | "dark" | "velvet" {
-  if (theme === "velvet") {
-    return "velvet";
-  }
+): "light" | "dark" {
   if (theme === "dark") {
     return "dark";
   }

@@ -1656,8 +1656,7 @@
     "dark": "Oscuro",
     "light": "Claro",
     "system": "Sistema",
-    "title": "Tema",
-    "velvet": "Velvet"
+    "title": "Tema"
   },
   "tierPicker": {
     "machineAriaLabel": "Nivel de máquina",

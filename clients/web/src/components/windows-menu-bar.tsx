@@ -94,7 +94,7 @@ export function WindowsMenuBar() {
           active={openId === entry.id}
           // Regular size for the text scale of the neighboring header
           // buttons, slimmed to menu-bar proportions. The labels recede
-          // into the chrome: quiet in light, disabled-ramp in dark/velvet
+          // into the chrome: quiet in light, disabled-ramp in dark
           // (a shade dimmer than quiet resolves there). no-drag: both
           // mounts sit inside a window-drag surface.
           className="h-6 px-2 [--vbtn-fg:var(--content-quiet)] dark:[--vbtn-fg:var(--content-disabled)] [-webkit-app-region:no-drag]"

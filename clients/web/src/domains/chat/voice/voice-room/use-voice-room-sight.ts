@@ -94,10 +94,6 @@ import {
   type SightCaptureRequest,
 } from "@/domains/chat/voice/live-voice/sight-capture";
 import { useBusSubscription } from "@/hooks/use-bus-subscription";
-import {
-  isVisionModeOn,
-  useVisionModeVariant,
-} from "@/hooks/use-vision-mode-flag";
 import { useSupportsSightStream } from "@/lib/backwards-compat/use-supports-sight-stream";
 import {
   type FrameGate,
@@ -216,7 +212,6 @@ export function useVoiceRoomSight(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   { cameraOpen, facing, nativePreview }: VoiceRoomSightOptions,
 ): VoiceRoomSight {
-  const visionMode = useVisionModeVariant();
   const supportsFrames = useSupportsSightStream(assistantId);
   // An assistant that refuses the frame at all, latched for the session. Read
   // here rather than beside the effect that acts on it, because it is one of
@@ -330,7 +325,6 @@ export function useVoiceRoomSight(
   // term going false mid-viewfinder ends a Live that is already running rather
   // than stranding it.
   const liveAvailable =
-    isVisionModeOn(visionMode) &&
     supportsFrames &&
     !!assistantId &&
     !sightFramesUnsupported;
