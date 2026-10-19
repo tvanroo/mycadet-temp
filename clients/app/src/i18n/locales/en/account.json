@@ -96,6 +96,8 @@
   "appShell": {
     "loading": "Loading assistant…",
     "error": "Unable to load assistant.",
+    "errorTitle": "We couldn't reach your assistant",
+    "errorBody": "It didn't respond just now. If your assistant was just started, give it a moment, then retry.",
     "notReady": "Your assistant isn't ready.",
     "notReadyTitle": "Your assistant isn't ready.",
     "notReadyBody": "It isn't up right now. Try again in a bit, or start it from your Cadet account.",

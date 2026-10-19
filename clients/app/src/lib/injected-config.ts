@@ -28,6 +28,13 @@ export const InjectedConfigSchema = z.object({
   assistantId: z.string().optional(),
   /** Serving assistant's display name (remote-web ingress configs only). */
   assistantName: z.string().optional(),
+  /**
+   * Assistant API base the serving host injects — same-origin `/v1` for the
+   * CLI's tunnel edge (nginx proxies it to the local gateway). Hosts that
+   * resolve their own API base (the desktop, the cloud takeover) omit it and
+   * the shell falls back to `cloudUrl`.
+   */
+  apiBaseUrl: z.string().optional(),
   /** Cloud web SPA base for this build's environment (remote-web ingress configs only). */
   hubUrl: z.string().optional(),
 });
@@ -48,4 +55,18 @@ export function readInjectedConfig(): InjectedConfig | undefined {
     (window as Window & { __CADET_CONFIG__?: unknown }).__CADET_CONFIG__,
   );
   return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * The assistant API base the shell resolves assistants through: the
+ * host-injected same-origin base when one is stamped (the CLI's tunnel edge
+ * injects `/v1`), else the host's cloud API base. A remote:local assistant
+ * served by the tunnel edge therefore resolves from its own origin — the
+ * cloud origin can neither see it nor answer with the credentials mode the
+ * shell sends.
+ */
+export function assistantApiBaseUrl(
+  config?: Pick<InjectedConfig, "apiBaseUrl" | "cloudUrl">,
+): string | undefined {
+  return config?.apiBaseUrl ?? config?.cloudUrl;
 }

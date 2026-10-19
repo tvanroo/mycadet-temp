@@ -144,7 +144,7 @@ for (const [status, message] of [
   [401, "Please sign in to continue."],
   [409, "Your assistant isn't ready."],
   [410, "This assistant is unavailable."],
-  [200, "Unable to load assistant."],
+  [200, "We couldn't reach your assistant"],
 ] as const) {
   test(`does not mount an iframe for HTTP ${status}`, async () => {
     request.mockResolvedValue(new Response("{}", { status }));
@@ -170,7 +170,7 @@ test("retries an API failure without account session probes", async () => {
     .mockResolvedValueOnce(new Response(null, { status: 503 }))
     .mockResolvedValueOnce(json(detail()));
   render(<AppShell {...props()} />);
-  await screen.findByText("Unable to load assistant.");
+  await screen.findByText("We couldn't reach your assistant");
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await screen.findByTitle("Assistant");
   expect(request).toHaveBeenCalledTimes(2);

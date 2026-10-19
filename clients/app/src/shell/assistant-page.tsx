@@ -1,7 +1,10 @@
 import { useLocation, useNavigate } from "react-router";
 import { AppShell } from "@app/app-shell";
 import { useTranslation } from "@app/i18n";
-import { readInjectedConfig } from "@app/lib/injected-config";
+import {
+  assistantApiBaseUrl,
+  readInjectedConfig,
+} from "@app/lib/injected-config";
 import {
   assistantSelectionState,
   selectedAssistantId,
@@ -15,7 +18,7 @@ export function AssistantPage() {
   const selection = selectedAssistantId(location.state, config ?? {});
   return (
     <AppShell
-      apiBaseUrl={config?.cloudUrl}
+      apiBaseUrl={assistantApiBaseUrl(config)}
       assistantId={selection ?? config?.assistantId}
       location={`${location.pathname}${location.search}${location.hash}`}
       origin={window.location.origin}

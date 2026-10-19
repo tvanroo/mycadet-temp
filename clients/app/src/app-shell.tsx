@@ -44,9 +44,17 @@ function AssistantShell({
   });
   if (state.status !== "ready") {
     return (
-      <div role={state.status === "notReady" ? "alert" : "status"}>
+      <div
+        role={
+          state.status === "notReady" || state.status === "error"
+            ? "alert"
+            : "status"
+        }
+      >
         {state.status === "notReady" ? (
           <NotReadyBody />
+        ) : state.status === "error" ? (
+          <ErrorBody />
         ) : (
           <p>{t(`appShell.${state.status}`)}</p>
         )}
@@ -110,6 +118,31 @@ function NotReadyBody() {
         {t("appShell.notReadyTitle")}
       </p>
       <p style={{ margin: 0, maxWidth: 420 }}>{t("appShell.notReadyBody")}</p>
+    </div>
+  );
+}
+
+/** The generic resolution failure — the request itself did not go through
+ * (network trouble, an unreachable API, a 5xx). Deliberately NOT the
+ * starting sentiment: nothing about the assistant's lifecycle is known.
+ * Modeled on the web app's ActiveAssistantGate error panel (CloudOff +
+ * title + body); inline styles so the portable bundle and the standalone
+ * build render it identically.
+ */
+function ErrorBody() {
+  const { t } = useTranslation("account");
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 8,
+      }}
+    >
+      <CloudOff size={20} aria-hidden="true" />
+      <p style={{ margin: 0, fontWeight: 600 }}>{t("appShell.errorTitle")}</p>
+      <p style={{ margin: 0, maxWidth: 420 }}>{t("appShell.errorBody")}</p>
     </div>
   );
 }

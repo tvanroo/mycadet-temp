@@ -96,6 +96,8 @@
   "appShell": {
     "loading": "正在加载助手…",
     "error": "无法加载助手。",
+    "errorTitle": "无法连接你的助手",
+    "errorBody": "它刚刚没有响应。如果你的助手刚启动，请稍等片刻后再重试。",
     "notReady": "你的助手尚未就绪。",
     "notReadyTitle": "你的助手尚未就绪。",
     "notReadyBody": "它当前不可用。请稍后重试，或从你的 Cadet 账户启动它。",

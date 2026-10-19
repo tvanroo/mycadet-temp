@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { InjectedConfig } from "@app/lib/injected-config";
+import {
+  assistantApiBaseUrl,
+  type InjectedConfig,
+} from "@app/lib/injected-config";
 
 const SelectionStateSchema = z.object({
   assistantSelection: z.object({
@@ -7,13 +10,13 @@ const SelectionStateSchema = z.object({
     apiBaseUrl: z.string(),
   }),
 });
-type HostConfig = Pick<InjectedConfig, "cloudUrl">;
+type HostConfig = Pick<InjectedConfig, "apiBaseUrl" | "cloudUrl">;
 
 export function assistantSelectionState(id: string, config: HostConfig) {
   return {
     assistantSelection: {
       id,
-      apiBaseUrl: config.cloudUrl ?? "/",
+      apiBaseUrl: assistantApiBaseUrl(config) ?? "/",
     },
   };
 }
@@ -27,7 +30,7 @@ export function selectedAssistantId(
     return undefined;
   }
   const selection = parsed.data.assistantSelection;
-  return selection.apiBaseUrl === (config.cloudUrl ?? "/")
+  return selection.apiBaseUrl === (assistantApiBaseUrl(config) ?? "/")
     ? selection.id
     : undefined;
 }
