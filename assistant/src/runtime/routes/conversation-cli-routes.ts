@@ -24,7 +24,6 @@ import { setConversationKey } from "../../persistence/conversation-key-store.js"
 import { listConversations } from "../../persistence/conversation-queries.js";
 import type { ConversationCreateType } from "../../persistence/conversation-types.js";
 import { getBindingByConversation } from "../../persistence/external-conversation-store.js";
-import { userFacingBlocksOfRow } from "../../persistence/user-facing-content.js";
 import { getLogger } from "../../util/logger.js";
 import { withSqliteRetry } from "../../util/sqlite-retry.js";
 import { LOCAL_PRINCIPALS } from "../auth/route-policy.js";
@@ -169,11 +168,7 @@ function handleExportCli({ body = {} }: RouteHandlerArgs) {
     ...conversation,
     messages: msgs.map((m) => ({
       role: m.role,
-      // An export is a transcript a person reads, so each row is projected the
-      // way the transcript projects it: a row a `send_user_message` turn marked
-      // private contributes the delivered message, not the model's working
-      // notes. Unmarked rows pass through byte for byte.
-      content: userFacingBlocksOfRow(m.content, m.metadata),
+      content: m.content,
       createdAt: m.createdAt,
     })),
   };

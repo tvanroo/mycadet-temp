@@ -37,7 +37,6 @@ import {
 import { resolveCallSiteConfig } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite, Speed } from "../config/schemas/llm.js";
-import { resolveSendUserMessageActive } from "../config/send-user-message-gate.js";
 import { isModeSessionRecoveryHealthy } from "../config/session-groups-gate.js";
 import {
   derefToolResultReReads,
@@ -60,7 +59,7 @@ import {
 } from "../persistence/conversation-crud.js";
 import { getResolvedConversationDirPath } from "../persistence/conversation-directories.js";
 import { reportSlowSync } from "../persistence/slow-sync-log.js";
-import { userFacingTextOfRow } from "../persistence/user-facing-content.js";
+import { extractTextFromStoredMessageContent } from "../persistence/message-content.js";
 import { defaultCompact } from "../plugins/defaults/compaction/compact.js";
 import {
   createContextWindowManager,
@@ -1218,7 +1217,6 @@ export class Conversation {
       personaOverride: this.wakePersonaOverride,
       onboardingContext: this.getOnboardingContext(),
       conversationId: this.conversationId,
-      sendUserMessageTool: resolveSendUserMessageActive(this),
       delegateIndependentTasks,
     });
     // Recorded only once the build succeeds: a wake's prompt sync swallows a
@@ -1466,7 +1464,7 @@ export class Conversation {
             // Quote what the channel actually carried: on a row a
             // `send_user_message` turn wrote, that is the message the tool
             // delivered, not the private working notes beside it.
-            const text = userFacingTextOfRow(row.content, row.metadata);
+            const text = extractTextFromStoredMessageContent(row.content);
             if (text) {
               // A split reply posts several provider messages from one row;
               // a reaction may name any of them. A post deleted on its own

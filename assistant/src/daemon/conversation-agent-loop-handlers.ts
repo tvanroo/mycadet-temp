@@ -27,7 +27,6 @@ import type {
 import { isAssistantFeatureFlagEnabled } from "../config/assistant-feature-flags.js";
 import { getConfig } from "../config/loader.js";
 import { SEND_USER_MESSAGE_TOOL_NAME } from "../config/send-user-message-constants.js";
-import { resolveSendUserMessageActive } from "../config/send-user-message-gate.js";
 import { recordEstimate } from "../context/estimator-calibration.js";
 import { stripInjectionsForCompaction } from "../context/strip-injections.js";
 import { getCalibrationProviderKey } from "../context/token-estimator.js";
@@ -61,12 +60,6 @@ import {
   setAgentLoopExitReasonOnLatestLog,
 } from "../persistence/llm-request-log-store.js";
 import { endSection, markSection } from "../persistence/slow-sync-log.js";
-import type { AssistantTextVisibility } from "../persistence/user-facing-content.js";
-import {
-  ASSISTANT_TEXT_VISIBILITY_KEY,
-  projectUserFacingContent,
-  sendUserMessageText,
-} from "../persistence/user-facing-content.js";
 import type { ContextWindowResult } from "../plugins/defaults/compaction/window-manager.js";
 import { indexMessageNow } from "../plugins/defaults/memory/indexer.js";
 import { backfillMemoryRecallLogMessageId } from "../plugins/defaults/memory/memory-recall-log-store.js";
@@ -326,13 +319,6 @@ export interface EventHandlerState {
   lastAssistantMessageId: string | undefined;
   /** Assistant rows that must join the turn's final disk-view export. */
   readonly assistantMessageIdsToSync: Set<string>;
-  /**
-   * Visibility marker stamped on {@link lastAssistantMessageId}, when the turn
-   * routed its reply through `send_user_message`. The turn's terminal
-   * `message_complete` SSE carries it so a client can give the live row the
-   * same per-row treatment history will hand it.
-   */
-  lastAssistantTextVisibility?: AssistantTextVisibility;
   /**
    * True when `handleLlmCallStarted` has reserved an empty assistant row
    * that has NOT yet been finalized via `handleMessageComplete`
@@ -1040,24 +1026,6 @@ export function buildPersistedAssistantContent(
   };
 
   return withSurfaces.map((block) => {
-    // A `send_user_message` call carries text a user reads: the read-side
-    // projection turns it into this row's text block, and history, exports,
-    // previews and the lexical index all show it. It is redacted here, at the
-    // one place the row is built, so no secret the model quoted into the
-    // message reaches SQLite in the clear.
-    const delivered = sendUserMessageText(block);
-    if (delivered !== null) {
-      const redacted = redact(stripDirectiveMarkup(delivered));
-      if (redacted === delivered) {
-        return block;
-      }
-      const tu = block as Extract<ContentBlock, { type: "tool_use" }>;
-      return {
-        ...tu,
-        input: { ...tu.input, message: redacted },
-        _redactionVersion: SENTINEL_REDACTION_VERSION,
-      } as ContentBlock;
-    }
     if (block.type === "text") {
       const tb = block as Extract<ContentBlock, { type: "text" }>;
       // Sentinel mode (chat-credential-reveal flag on) persists redactions
@@ -1536,15 +1504,6 @@ function buildAssistantChannelMetadata(
 ): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     ...provenanceFromTrustContext(turnOrRestingTrust(deps.ctx)),
-    // A turn routing its reply through `send_user_message` writes working
-    // notes, so the row is marked private from the moment it is reserved: a
-    // turn that dies before `message_complete` still has its scratchpad
-    // projected out of every user-facing read. The finalize below re-stamps
-    // it, promoting the row to `"visible"` when the fallback surfaced the raw
-    // text after all.
-    ...(resolveSendUserMessageActive(deps.ctx)
-      ? { [ASSISTANT_TEXT_VISIBILITY_KEY]: "private" }
-      : {}),
     userMessageChannel: deps.turnChannelContext.userMessageChannel,
     assistantMessageChannel: deps.turnChannelContext.assistantMessageChannel,
     userMessageInterface: deps.turnInterfaceContext.userMessageInterface,
@@ -3237,17 +3196,8 @@ export async function handleMessageComplete(
   // it here separately is the cheapest way to keep the directive
   // side-effects local to this handler while letting the shared helper
   // own the persisted-content shape.
-  // On a row whose plain text is private working notes, the text a user reads
-  // is what `send_user_message` carried, so that is where an attachment
-  // directive has to be found: scanning the raw blocks would miss a
-  // `cadet://` link the model put in its message and the file would never be
-  // attached to the delivered reply.
   const { directives: msgDirectives, warnings: msgWarnings } =
-    cleanAssistantContent(
-      event.assistantTextVisibility === "private"
-        ? projectUserFacingContent(event.message.content, { toolGated: true })
-        : event.message.content,
-    );
+    cleanAssistantContent(event.message.content);
   state.accumulatedDirectives.push(...msgDirectives);
   state.directiveWarnings.push(...msgWarnings);
   if (msgDirectives.length > 0) {
@@ -3304,18 +3254,9 @@ export async function handleMessageComplete(
   // assembly can attribute each assistant message to the model that actually
   // ran it — including per-call reroutes by a `pre-model-call` hook. Absent on
   // synthesized completions with no provider response; the key is omitted then.
-  // How this row's plain text reached the user, reported by the loop and
-  // stamped in the same transaction as the final content. Only a run under the
-  // tool-gated reply surface carries it: `"private"` for working notes the
-  // projection hides, `"visible"` for a fallback turn whose raw text the user
-  // actually saw and which therefore has to render and deliver like any reply.
   const finalizeMetadata: Record<string, unknown> = {
     ...(event.model ? { model: event.model } : {}),
-    ...(event.assistantTextVisibility
-      ? { [ASSISTANT_TEXT_VISIBILITY_KEY]: event.assistantTextVisibility }
-      : {}),
   };
-  state.lastAssistantTextVisibility = event.assistantTextVisibility;
   const persisted = await finalizeInflightContent(
     state.inflightWriters.get(assistantMessageId),
     assistantMessageId,

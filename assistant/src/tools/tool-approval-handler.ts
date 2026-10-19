@@ -902,9 +902,7 @@ export class ToolApprovalHandler {
 
     if (
       context.diskPressureCleanupModeActive === true &&
-      !survivesDiskPressureCleanup(name, {
-        sendUserMessageActive: context.sendUserMessageActive,
-      })
+      !survivesDiskPressureCleanup(name)
     ) {
       const msg = `Tool "${name}" is not available during disk pressure cleanup mode.`;
       this.auditGateError(context, name, input, riskLevel, startTime, msg);

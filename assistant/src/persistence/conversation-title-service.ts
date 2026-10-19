@@ -26,7 +26,6 @@ import {
   updateConversationTitle,
 } from "./conversation-crud.js";
 import { isReplaceableTitle } from "./conversation-title-placeholders.js";
-import { projectPersistedAssistantContent } from "./user-facing-content.js";
 
 export { isReplaceableTitle } from "./conversation-title-placeholders.js";
 
@@ -615,13 +614,7 @@ function buildRegenerationPrompt(recentMessages: MessageRow[]): string {
   const parts: string[] = ["Recent messages:"];
 
   for (const msg of recentMessages) {
-    // Read each row the way a user reads it. On a turn that routed its reply
-    // through `send_user_message`, the row's plain text is a private
-    // scratchpad and the reply is inside the tool call, so titling from the
-    // raw row names the conversation after the model's notes.
-    const text = extractTextForTitle(
-      projectPersistedAssistantContent(msg.content, msg.metadata),
-    );
+    const text = extractTextForTitle(msg.content);
     if (!text) {
       continue;
     }

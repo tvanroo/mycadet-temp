@@ -38,7 +38,6 @@ import {
 } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite } from "../config/schemas/llm.js";
-import { isSendUserMessageActiveForTurn } from "../config/send-user-message-gate.js";
 import { desktopAutomationLease } from "../desktop/desktop-automation-lease.js";
 import { writeRelationshipState } from "../home/relationship-state-writer.js";
 import type { UserPromptSubmitInputContext } from "../hooks/types.js";
@@ -596,8 +595,6 @@ export async function runAgentLoopImpl(
   // run: the tool surface, the reserved row's visibility marker, and the
   // prompt section all read this snapshot instead of the live flag, so a
   // remote flag change mid-turn cannot contradict what the run is doing.
-  const sendUserMessageActive = isSendUserMessageActiveForTurn(ctx);
-  ctx.currentTurnSendUserMessageActive = sendUserMessageActive;
 
   // Re-resolve the system prompt under the snapshots just set and push it into
   // the loop when the persona changed. The loop reuses the prompt frozen at
@@ -1637,7 +1634,6 @@ export async function runAgentLoopImpl(
           callSite: turnCallSite,
           inferenceCallSite,
           locale: options?.locale,
-          suppressAssistantText: sendUserMessageActive,
           supportsDynamicUi: conversationSupportsDynamicUi(ctx),
           trust: loopTrust,
           overrideProfile: turnOverrideProfile,

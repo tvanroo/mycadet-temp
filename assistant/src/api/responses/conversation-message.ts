@@ -633,16 +633,6 @@ export const ConversationMessageSchema = z.object({
    *  into the following user message. Absent on shutter photos, spoken turns
    *  carrying parked frames, and every other row. */
   cameraFrame: z.literal(true).optional(),
-  /** How this assistant row's plain text reached the user, set only on a turn
-   *  that routed its reply through the `send_user_message` tool. `"private"`
-   *  means the row's text blocks are the model's working notes and the text
-   *  the client shows came from the tool call; `"visible"` means the turn
-   *  ended without ever calling the tool, so its raw text was surfaced as the
-   *  fallback and is the reply. Absent on every other row. Clients gate
-   *  per-row presentation (e.g. collapsing intermediate activity) on this
-   *  rather than on the feature flag, so a row keeps the treatment it was
-   *  written with. */
-  assistantTextVisibility: z.enum(["private", "visible"]).optional(),
   /** Present on a reaction row, either direction: an inbound reaction the
    *  daemon persisted, or the assistant's own (`selfAuthored`). Clients
    *  render a reaction line from this instead of the row's stored sentinel
