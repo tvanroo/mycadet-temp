@@ -160,10 +160,7 @@ function placeOf(toolCall: ChatMessageToolCall): QuietPlace | null {
 export function describeQuietStep(
   toolCall: ChatMessageToolCall,
 ): QuietStep | null {
-  if (
-    isUiSurfaceToolCall(toolCall) ||
-    UNNAMED_TOOL_NAMES.has(toolCall.name)
-  ) {
+  if (isUiSurfaceToolCall(toolCall) || UNNAMED_TOOL_NAMES.has(toolCall.name)) {
     return null;
   }
   const place = placeOf(toolCall);
@@ -283,7 +280,6 @@ export function hasQuietTurnProgress(message: {
   toolCalls?: { name: string; pendingConfirmation?: unknown }[];
 }): boolean {
   return !!message.toolCalls?.some(
-    (toolCall) =>
-      !isUiSurfaceToolCall(toolCall),
+    (toolCall) => !isUiSurfaceToolCall(toolCall),
   );
 }

@@ -2319,75 +2319,6 @@ describe("session-agent-loop", () => {
       expect(finalRowSyncs).toHaveLength(1);
     });
 
-    test("defers an earlier delivered attachment reply to ordered turn settlement", async () => {
-      const featureFlags = await import("../config/assistant-feature-flags.js");
-      const flagSpy = spyOn(
-        featureFlags,
-        "isAssistantFeatureFlagEnabled",
-      ).mockImplementation((key: string) => key === "send-user-message");
-      reserveMessageMock
-        .mockImplementationOnce(async () => ({
-          id: "msg-delivered-reply",
-          createdAt: 1_700_000_000_050,
-        }))
-        .mockImplementationOnce(async () => ({
-          id: "msg-tool-result",
-          createdAt: 1_700_000_000_050,
-        }))
-        .mockImplementationOnce(async () => ({
-          id: "msg-final-private",
-          createdAt: 1_700_000_000_050,
-        }));
-      mockTurnReplyMessageId = "msg-delivered-reply";
-      resolveAssistantAttachmentsMock.mockImplementation(async () => ({
-        assistantAttachments: [],
-        emittedAttachments: [],
-        directiveWarnings: [],
-        persistedFiles: [],
-        linkedAttachmentIds: ["attachment-1"],
-        computerUseScreenshotAttachmentIds: [],
-      }));
-      const assistantSyncsAtTerminal: string[][] = [];
-      const ctx = makeSendUserMessageCtx();
-
-      try {
-        await runAgentLoopImpl(ctx, "click it", "msg-1", (event) => {
-          if (event.type !== "message_complete") {
-            return;
-          }
-          const calls = syncMessageToDiskMock.mock.calls as unknown as Array<
-            [string, string, number]
-          >;
-          assistantSyncsAtTerminal.push(
-            calls
-              .map((call) => call[1])
-              .filter((id) =>
-                ["msg-delivered-reply", "msg-final-private"].includes(id),
-              ),
-          );
-        });
-      } finally {
-        flagSpy.mockRestore();
-      }
-
-      expect(resolveTurnReplyMessageIdMock).toHaveBeenCalledWith(
-        "test-conv",
-        "msg-1",
-        "msg-final-private",
-      );
-      expect(assistantSyncsAtTerminal.at(-1)).toEqual([]);
-      const calls = syncMessageToDiskMock.mock.calls as unknown as Array<
-        [string, string, number]
-      >;
-      expect(
-        calls
-          .map((call) => call[1])
-          .filter((id) =>
-            ["msg-delivered-reply", "msg-final-private"].includes(id),
-          ),
-      ).toEqual(["msg-delivered-reply", "msg-final-private"]);
-    });
-
     test("does not queue an earlier delivered reply without a linked attachment", async () => {
       const featureFlags = await import("../config/assistant-feature-flags.js");
       const flagSpy = spyOn(
@@ -3274,39 +3205,6 @@ describe("session-agent-loop", () => {
       );
       expect(complete.length).toBeGreaterThan(0);
       expect(complete.at(-1)).not.toHaveProperty("assistantTextVisibility");
-    });
-
-    test("never narrates the delivery tool as work in progress", async () => {
-      // The call IS the reply the user just read and its result is a bare
-      // receipt, so "Processing send user message results" would narrate
-      // plumbing at the moment the answer appears.
-      const activityStates: unknown[][] = [];
-      const ctx = makeCtx({
-        currentCallSite: "mainAgent",
-        emitActivityState: (...args: unknown[]) => {
-          activityStates.push(args);
-        },
-        providerResponses: [
-          toolUseResponse("tu_1", "send_user_message", {
-            message: "Two meetings today.",
-          }),
-          textResponse("done"),
-        ],
-        loopTools: [
-          {
-            name: "send_user_message",
-            description: "deliver",
-            input_schema: { type: "object" },
-          },
-        ],
-        toolExecutor: async () => ({ content: "Delivered.", isError: false }),
-      });
-
-      await runAgentLoopImpl(ctx, "hi", "msg-1", () => {});
-
-      expect(JSON.stringify(activityStates)).not.toContain(
-        "Processing send user message results",
-      );
     });
 
     test("still narrates an ordinary tool's results", async () => {
@@ -4240,7 +4138,6 @@ describe("session-agent-loop", () => {
 
     test.each([
       { name: "a user turn", userTrigger: true },
-      { name: "private earlier output", privateResult: true },
       { name: "failure-only work", noEarlierSuccess: true },
       { name: "scheduled work", cronRunId: "run-schedule" },
     ])("an escaping exception stays silent for $name", async (scenario) => {

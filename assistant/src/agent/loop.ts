@@ -2380,12 +2380,7 @@ export class AgentLoop {
         // Sensitive-output substitution is applied to match what the live stream
         // would have shown. A no-op when text already streamed live — that
         // stream stands. Call only for a turn being kept.
-        // Returns whether it surfaced the raw text, which is what tells the
-        // daemon a suppressed run's fallback fired for this message.
-        const emitFinalAssistantText = (
-          content: ContentBlock[],
-          opts: { turnEnding: boolean },
-        ): boolean => {
+        const emitFinalAssistantText = (content: ContentBlock[]): boolean => {
           if (streamedVisibleText) {
             return false;
           }
@@ -2487,9 +2482,7 @@ export class AgentLoop {
           const willContinueTruncatedTurn =
             maxTokensDecision === "continue" &&
             postModelCallContinues < MAX_POST_MODEL_CALL_CONTINUES;
-          emitFinalAssistantText(safeAssistantMessage.content, {
-            turnEnding: !willContinueTruncatedTurn,
-          });
+          emitFinalAssistantText(safeAssistantMessage.content);
           if (willContinueTruncatedTurn) {
             postModelCallContinues++;
             rlog.warn(
@@ -2663,9 +2656,7 @@ export class AgentLoop {
                   : block,
               )
             : assistantMessage.content;
-          emitFinalAssistantText(displayContent, {
-            turnEnding: toolUseBlocks.length === 0,
-          });
+          emitFinalAssistantText(displayContent);
         }
 
         history.push(assistantMessage);

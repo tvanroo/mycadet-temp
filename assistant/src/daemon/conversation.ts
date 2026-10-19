@@ -58,8 +58,8 @@ import {
   setConversationProcessingStartedAt,
 } from "../persistence/conversation-crud.js";
 import { getResolvedConversationDirPath } from "../persistence/conversation-directories.js";
-import { reportSlowSync } from "../persistence/slow-sync-log.js";
 import { extractTextFromStoredMessageContent } from "../persistence/message-content.js";
+import { reportSlowSync } from "../persistence/slow-sync-log.js";
 import { defaultCompact } from "../plugins/defaults/compaction/compact.js";
 import {
   createContextWindowManager,

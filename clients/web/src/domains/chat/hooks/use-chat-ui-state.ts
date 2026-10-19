@@ -26,7 +26,6 @@ import {
   hasPendingAssistantResponse,
 } from "@/domains/chat/utils/chat";
 import {
-  hasRenderedStepStack,
   hasRenderedThinking,
 } from "@/domains/chat/transcript/message-content";
 import { liveAssistantRowId } from "@/domains/chat/utils/stream-updaters/shared";

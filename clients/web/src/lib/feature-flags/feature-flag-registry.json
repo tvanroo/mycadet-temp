@@ -18,28 +18,11 @@
       "defaultEnabled": false
     },
     {
-      "id": "in-chat-onboarding-tour",
-      "scope": "client",
-      "key": "in-chat-onboarding-tour",
-      "label": "In-Chat Onboarding Tour",
-      "description": "Multivariate experiment for the eyes-led in-chat onboarding tour. control = straight to chat after research onboarding (current behavior); tour = the extended tour auto-plays on first workspace entry. Desktop-only: phone-width viewports and the native shell get neither the tour nor its telemetry (not even the exposure event), so the funnel measures desktop sessions exclusively. Targeted via LaunchDarkly (70% tour / 30% control).",
-      "defaultEnabled": "control",
-      "values": ["control", "tour"]
-    },
-    {
       "id": "internal-thread-actions",
       "scope": "client",
       "key": "internal-thread-actions",
       "label": "Internal Thread Actions",
       "description": "Show the internal thread affordances: 'Fork from here' and 'Summarize up to here' on messages, 'Fork Conversation', 'Analyze Conversation', and 'Copy conversation ID' in the thread menu, plus the LLM inspector surfaces. The flag is the sole gate: any session that enables it gets the affordances, including local sessions with no platform identity.",
-      "defaultEnabled": false
-    },
-    {
-      "id": "marketing-pricing-takeover",
-      "scope": "client",
-      "key": "marketing-pricing-takeover",
-      "label": "Marketing Pricing Takeover",
-      "description": "Gates the marketing pricing takeover page (mycadet.ai/pricing) and the `/assistant/checkout?package=<slug>` deep link its package CTAs target. One flag covers both halves of the funnel so they can never be enabled independently and strand a CTA. When off, the checkout deep link redirects to the in-app plans takeover.",
       "defaultEnabled": false
     },
     {
@@ -51,37 +34,12 @@
       "defaultEnabled": false
     },
     {
-      "id": "send-user-message",
-      "scope": "both",
-      "key": "send-user-message",
-      "label": "Send User Message Tool",
-      "description": "Route all user-facing assistant text through the send_user_message tool instead of streamed assistant text",
-      "defaultEnabled": false
-    },
-    {
       "id": "sidebar-done",
       "scope": "both",
       "key": "sidebar-done",
       "label": "Sidebar Done",
       "description": "Turns archiving a chat into marking it done: the sidebar row carries a Done check instead of the overflow menu, an All chats page lists the full history, and done chats stay findable in search by default. Off keeps today's Archive wording, the overflow menu, and search that hides archived rows unless the query asks for them.",
       "defaultEnabled": false
-    },
-    {
-      "id": "velvet",
-      "scope": "client",
-      "key": "velvet",
-      "label": "Velvet",
-      "description": "Enable the Velvet design theme.",
-      "defaultEnabled": false
-    },
-    {
-      "id": "vision-mode",
-      "scope": "client",
-      "key": "vision-mode",
-      "label": "Vision Mode",
-      "description": "Gates hold-to-Live ambient frame sampling in the voice room camera. String-valued so future A/B arms can be added as new values.",
-      "defaultEnabled": "off",
-      "values": ["off", "on"]
     }
   ]
 }

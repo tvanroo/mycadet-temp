@@ -91,8 +91,7 @@ export function getMessageContent(
   } catch {
     // Same projection as the render above: the raw-extract fallback must not
     // become the one path that shows a private scratchpad.
-    text =
-      extractTextFromStoredMessageContent(dbMessage.content) || undefined;
+    text = extractTextFromStoredMessageContent(dbMessage.content) || undefined;
   }
 
   return {

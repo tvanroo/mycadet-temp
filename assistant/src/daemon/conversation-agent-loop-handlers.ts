@@ -997,33 +997,6 @@ export function buildPersistedAssistantContent(
         : {}),
     } as unknown as ContentBlock);
   }
-  // One redactor for every block shape below, so the plain-text branch and the
-  // tool-delivered branch can never drift on which mode they run in.
-  const redact = (value: string): string =>
-    revealCandidates !== undefined
-      ? redactSecretsForChat(value, revealCandidates, forChatMints)
-      : redactCandidateValuesLegacy(value, legacyFallbackCandidates);
-
-  /**
-   * Give a delivered message the same cleaning a top-level text block gets:
-   * the projection turns it into this row's text, so a legacy
-   * `<cadet-attachment />` tag left inside it renders to the user verbatim.
-   * Running it through `cleanAssistantContent` rather than re-implementing the
-   * strip keeps the two from drifting as the directive syntax evolves.
-   *
-   * Discovery of the directive is separate and already runs over the projected
-   * blocks in `handleMessageComplete`, so this only removes the markup; the
-   * attachment it names is still resolved and linked to the row.
-   */
-  const stripDirectiveMarkup = (message: string): string => {
-    if (!message.includes("<cadet-attachment")) {
-      return message;
-    }
-    const [cleaned] = cleanAssistantContent([{ type: "text", text: message }])
-      .cleanedContent as Array<{ text?: unknown } | undefined>;
-    return typeof cleaned?.text === "string" ? cleaned.text : message;
-  };
-
   return withSurfaces.map((block) => {
     if (block.type === "text") {
       const tb = block as Extract<ContentBlock, { type: "text" }>;

@@ -1033,8 +1033,7 @@ export function TranscriptMessageBody({
     // inline thinking `SingleActivity`, plus any spawn cards. A trailing run
     // reads as still-streaming only while the row is live.
     const combinedThinking = thinkingContents.join("\n");
-    const showThinking =
-      combinedThinking || (isStreaming && isLastGroup);
+    const showThinking = combinedThinking || (isStreaming && isLastGroup);
     return (
       <Fragment key={key}>
         {showThinking && (

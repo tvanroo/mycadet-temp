@@ -196,8 +196,7 @@ export function ComposerPeek({
   // below and leaves the lifecycle alone.
   const drawerPresented = useMobileDrawerStore.use.presented();
 
-  const runnable =
-    active && !reduce && !!components && !!traits;
+  const runnable = active && !reduce && !!components && !!traits;
 
   // Where this avatar's eye ink sits in its rendered square — drives the
   // per-shape crop/size below so the eyes always ride the edge.
