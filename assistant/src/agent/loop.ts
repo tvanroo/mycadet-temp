@@ -2400,6 +2400,22 @@ export class AgentLoop {
           return false;
         };
 
+        // Build the assistant message with placeholder-only text.
+        // Both provider history and persisted conversation store must retain
+        // placeholders so the model never sees real sensitive values — neither
+        // on subsequent loop turns nor on session reload from the database.
+        // Substitution to real values happens only in streamed text_delta events.
+        let assistantMessage: Message = {
+          role: "assistant",
+          content: response.content,
+        };
+
+        // The model's own tool calls. The executable set is finalized after
+        // the `post-model-call` hook below, which may add or drop tool calls;
+        // this raw set drives only the completion log and the max-tokens branch.
+        const modelToolUseBlocks = response.content.filter(
+          (block): block is ToolUseBlock => block.type === "tool_use",
+        );
 
         rlog.info(
           {
@@ -2497,9 +2513,6 @@ export class AgentLoop {
             type: "message_complete",
             message: safeAssistantMessage,
             model: response.model,
-            ...(truncatedVisibility
-              ? { assistantTextVisibility: truncatedVisibility }
-              : {}),
           });
           await stopTurn("max_tokens_reached");
           break;

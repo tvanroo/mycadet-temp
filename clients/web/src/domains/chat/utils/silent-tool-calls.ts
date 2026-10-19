@@ -21,7 +21,6 @@
  * the only trace of a question that was never answered).
  */
 
-import { SEND_USER_MESSAGE_TOOL_NAME } from "@/domains/chat/utils/assistant-text-visibility";
 
 /** A tool call as this module reads it: the name, and any pending confirmation. */
 export interface SilentToolCandidate {
@@ -41,7 +40,6 @@ const UI_SURFACE_TOOL_NAMES = new Set(["ui_show", "ui_update", "ui_dismiss"]);
  * actually emit rather than one this client hopes exists.
  */
 const BOOKKEEPING_TOOL_NAMES = new Set([
-  SEND_USER_MESSAGE_TOOL_NAME,
   // Memory plugin (`plugins/defaults/memory/tools.ts`).
   "remember",
   "recall",

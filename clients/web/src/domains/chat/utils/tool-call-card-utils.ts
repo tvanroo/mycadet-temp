@@ -271,9 +271,6 @@ function webSearchStepTitle(terminal: boolean): string {
  * than a thought, so the run says what it did in the tense of its sibling
  * `webSearchStepTitle`.
  */
-function webFetchStepTitle(terminal: boolean): string {
-  return terminal ? "Read the web" : "Reading the web";
-}
 
 function clampResults(results: WebSearchResultItem[]): {
   visible: WebSearchResultItem[];
@@ -646,7 +643,6 @@ function deriveActionDisplayLabel(
 function deriveCurrentStepTitle(
   toolCalls: ChatMessageToolCall[],
   liveWebActivity: Record<string, ToolActivityMetadata>,
-  hideThinkingUi: boolean,
 ): string {
   for (let i = toolCalls.length - 1; i >= 0; i--) {
     const tc = toolCalls[i]!;
@@ -663,7 +659,7 @@ function deriveCurrentStepTitle(
         return webSearchStepTitle(terminal);
       }
       if (tc.name === "web_fetch") {
-        return hideThinkingUi ? webFetchStepTitle(terminal) : "Thinking";
+        return "Thinking";
       }
     } else {
       return deriveStepLabel(tc).title;
@@ -829,12 +825,6 @@ function deriveCardState(
  */
 /** Render-time choices the projection cannot read for itself. */
 export interface ToolCallCardDataOptions {
-  /**
-   * Whether the transcript hides the assistant's reasoning (see
-   * `useHideThinkingUi`). The card carries no reasoning of its own, but one
-   * header title stands in for it, and that title has to change with the rest.
-   */
-  hideThinkingUi?: boolean;
   /** The owning transcript group is the active trailing group for this turn. */
   active?: boolean;
 }
@@ -974,7 +964,6 @@ export function computeToolCallCardDataFromItems(
     currentStepTitle = deriveCurrentStepTitle(
       renderableToolCalls,
       liveWebActivity,
-      options.hideThinkingUi ?? false,
     );
     currentStepInfo = deriveCurrentStepInfo(
       renderableToolCalls,

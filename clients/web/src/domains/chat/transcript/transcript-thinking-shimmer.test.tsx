@@ -110,15 +110,6 @@ function assistantToolThenThinkingItem(id: string): MessageItem {
   return { kind: "message", key: id, message: msg };
 }
 
-/** The same row, marked the way a reply carried by `send_user_message` is. */
-function privateThinkingItem(id: string, reasoning: string): MessageItem {
-  const item = assistantThinkingItem(id, reasoning);
-  return {
-    ...item,
-    message: { ...item.message, assistantTextVisibility: "private" },
-  };
-}
-
 const noop = () => {};
 const sharedProps = { onSurfaceAction: noop };
 
@@ -194,26 +185,5 @@ describe("streaming thinking shimmer wiring", () => {
     expect(card.textContent).not.toContain("Thinking");
     expect(card.textContent).toContain("Completed");
     expect(queryByTestId("streaming-shimmer")).toBeNull();
-  });
-});
-
-describe("a row whose prose is a scratchpad", () => {
-  test("streaming turn → no thinking row, shimmering or otherwise", () => {
-    useTurnStore.setState({ phase: "thinking" });
-    const { queryByTestId, queryByText } = renderTurn(
-      privateThinkingItem("a1", "let me look that up"),
-    );
-    expect(queryByTestId("thought-process-link")).toBeNull();
-    expect(queryByTestId("thought-process-loading")).toBeNull();
-    expect(queryByText("Thinking")).toBeNull();
-  });
-
-  test("settled turn → the reasoning it carries stays unrendered", () => {
-    useTurnStore.setState({ phase: "idle" });
-    const { queryByTestId, queryByText } = renderTurn(
-      privateThinkingItem("a1", "let me look that up"),
-    );
-    expect(queryByTestId("thought-process-link")).toBeNull();
-    expect(queryByText("let me look that up")).toBeNull();
   });
 });

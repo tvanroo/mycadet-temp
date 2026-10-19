@@ -116,7 +116,6 @@ export function resolveRunResult(
       };
     }
     return undefined;
-    }
   }
   return undefined;
 }

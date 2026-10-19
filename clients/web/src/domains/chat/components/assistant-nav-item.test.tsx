@@ -17,7 +17,6 @@ import { SIDE_MENU_TILE_SIZE } from "@mycadet/design-library";
 import { SIDEBAR_ASSISTANT_DISC_SIZE } from "@/components/sidebar-nav-geometry";
 import type { CharacterComponents, CharacterTraits } from "@/types/avatar";
 import { AssistantNavItem } from "@/domains/chat/components/assistant-nav-item";
-import { useInChatOnboardingStore } from "@/stores/in-chat-onboarding-store";
 import { BUNDLED_COMPONENTS } from "@/utils/avatar-bundled-components";
 import { resolveAvatarAccentHex } from "@/utils/avatar-accent";
 
@@ -246,28 +245,5 @@ describe("AssistantNavItem New Chat button", () => {
     }
   });
 
-  /* A client render: zustand hands server rendering the store's initial
-     state, so `renderToStaticMarkup` would never see the tour raised. */
-  test("the button stays on the row while the tour owns the nav, drained of colour", () => {
-    useInChatOnboardingStore.setState({ navTourActive: true });
-    try {
-      const { container, unmount } = render(
-        createElement(AssistantNavItem, {
-          assistantId: "a1",
-          label: "Haze II",
-          active: false,
-          onSelect: () => {},
-          onNewConversation: () => {},
-        }),
-      );
-      const button = container.querySelector<HTMLElement>(
-        '[data-tour-id="new-chat"]',
-      );
-      expect(button?.getAttribute("aria-label")).toBe("New Chat");
-      expect(button?.getAttribute("data-variant")).toBe("ghost");
-      unmount();
-    } finally {
-      useInChatOnboardingStore.setState({ navTourActive: false });
-    }
-  });
+
 });

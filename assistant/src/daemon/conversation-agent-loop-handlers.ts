@@ -26,7 +26,6 @@ import type {
 } from "../channels/types.js";
 import { isAssistantFeatureFlagEnabled } from "../config/assistant-feature-flags.js";
 import { getConfig } from "../config/loader.js";
-import { SEND_USER_MESSAGE_TOOL_NAME } from "../config/send-user-message-constants.js";
 import { recordEstimate } from "../context/estimator-calibration.js";
 import { stripInjectionsForCompaction } from "../context/strip-injections.js";
 import { getCalibrationProviderKey } from "../context/token-estimator.js";
@@ -1719,7 +1718,7 @@ function handleTextDelta(
 function announcesToolResultStatus(
   toolName: string | undefined,
 ): toolName is string {
-  return toolName !== undefined && toolName !== SEND_USER_MESSAGE_TOOL_NAME;
+  return toolName !== undefined;
 }
 
 function handleThinkingDelta(

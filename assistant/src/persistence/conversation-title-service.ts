@@ -7,7 +7,6 @@
  * overwritten, never user-provided custom titles.
  */
 
-import { SEND_USER_MESSAGE_DELIVERED_ACK } from "../config/send-user-message-constants.js";
 import { MESSAGE_KEYS } from "../i18n/index.js";
 import {
   requestShortLabel,
@@ -584,12 +583,7 @@ function extractTextForTitle(raw: string | Array<{ type: string }>): string {
         // tool_result string content carries topical signal.
       } else if (block.type === "tool_result") {
         if (typeof block.content === "string") {
-          // The delivery tool answers a bare receipt, never anything topical.
-          // Titling from it names a gated conversation "Delivery Confirmation"
-          // instead of what the user actually asked about.
-          if (block.content.trim() !== SEND_USER_MESSAGE_DELIVERED_ACK) {
-            texts.push(block.content);
-          }
+          texts.push(block.content);
         } else if (Array.isArray(block.content)) {
           for (const nested of block.content) {
             if (

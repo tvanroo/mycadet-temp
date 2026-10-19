@@ -12,13 +12,6 @@ import { SIDE_MENU_TILE_SIZE } from "@mycadet/design-library";
 
 import { assistantStateCanServeChat } from "@/assistant/lifecycle";
 import { useAssistantLifecycleStore } from "@/assistant/lifecycle-store";
-import {
-  selectChatFocusActive,
-  selectHeaderCenterHidden,
-  selectHeaderControlsHidden,
-  selectTourActive,
-  useInChatOnboardingStore,
-} from "@/stores/in-chat-onboarding-store";
 import { useResolvedAssistantsStore } from "@/stores/resolved-assistants-store";
 import { MOBILE_MEDIA_QUERY, useIsMobile } from "@/hooks/use-is-mobile";
 import {
@@ -351,14 +344,6 @@ export function ChatLayout({
   const showInternalActions = useCanUseInternalThreadActions();
   const isNative = useIsNativePlatform();
   const electron = isElectron();
-  // In-chat onboarding prototype: the tour's opening beats hide the sidebar
-  // and header controls; the tour reveals them itself as it walks.
-  const chatFocusActive = useInChatOnboardingStore(selectChatFocusActive);
-  const headerControlsHidden = useInChatOnboardingStore(
-    selectHeaderControlsHidden,
-  );
-  const headerCenterHidden = useInChatOnboardingStore(selectHeaderCenterHidden);
-  const tourActive = useInChatOnboardingStore(selectTourActive);
 
   // --- Assistant identity from store (written by ChatPage) ---
   const assistantName = useAssistantIdentityStore.use.name();
@@ -408,7 +393,7 @@ export function ChatLayout({
   // show — so the tour's whole run forces the rail expanded. Derived (not
   // written through setCollapsed) so the user's persisted preference is
   // untouched and the rail collapses back on its own when the tour ends.
-  const effectiveCollapsed = collapsed && !tourActive;
+  const effectiveCollapsed = collapsed;
 
   useEffect(() => {
     setLocalBool(SIDEBAR_COLLAPSED_STORAGE_KEY, collapsed);
@@ -429,95 +414,6 @@ export function ChatLayout({
   // The node lives in state (callback ref) so the effect re-runs when the
   // desktop aside leaves and re-enters the tree (mobile layout swaps), not
   // only when the focus flag flips.
-  const [sideMenuAside, setSideMenuAside] = useState<HTMLElement | null>(null);
-  const railFocusAnimationsRef = useRef<Animation[]>([]);
-  const prevChatFocusRef = useRef(chatFocusActive);
-  useEffect(() => {
-    // Snapshot before the null check: focus flips that land while the aside
-    // is absent must still be recorded, so a later remount settles into the
-    // current state instead of replaying the missed transition.
-    const prev = prevChatFocusRef.current;
-    prevChatFocusRef.current = chatFocusActive;
-    if (!sideMenuAside) {
-      // Drop animations that target the departed node so a remount
-      // reinitializes from scratch.
-      for (const animation of railFocusAnimationsRef.current) {
-        animation.cancel();
-      }
-      railFocusAnimationsRef.current = [];
-      return;
-    }
-    const aside = sideMenuAside;
-    if (prev === chatFocusActive) {
-      if (chatFocusActive && railFocusAnimationsRef.current.length === 0) {
-        // Mounted (or remounted) while already focused: hold the hidden
-        // state, no motion.
-        railFocusAnimationsRef.current = [
-          aside.animate(
-            { width: "0px", opacity: "0", marginRight: "-16px" },
-            { duration: 0, fill: "forwards" },
-          ),
-        ];
-      }
-      return;
-    }
-    // Sample mid-flight values before cancelling so a reversal starts from
-    // where the rail visually is.
-    const style = getComputedStyle(aside);
-    const fromWidth = style.width;
-    const fromMargin = style.marginRight;
-    const fromOpacity = style.opacity;
-    for (const animation of railFocusAnimationsRef.current) {
-      animation.cancel();
-    }
-    if (chatFocusActive) {
-      // Hide: ease away smoothly and hold width 0 while focused. The
-      // negative margin cancels the row gap so the chat goes full-width.
-      railFocusAnimationsRef.current = [
-        aside.animate(
-          [
-            { width: fromWidth, marginRight: fromMargin },
-            { width: "0px", marginRight: "-16px" },
-          ],
-          { duration: 500, easing: "ease-in-out", fill: "forwards" },
-        ),
-        aside.animate([{ opacity: fromOpacity }, { opacity: "0" }], {
-          duration: 300,
-          easing: "ease-in-out",
-          fill: "forwards",
-        }),
-      ];
-    } else {
-      // Reveal: a back-ease so the rail lands with a slight bounce. The
-      // landing width comes from state, not DOM measurement: skipping the
-      // tour un-forces a collapsed rail in this same commit, so the nav's
-      // measured width still reads expanded while it is already collapsing
-      // to the rail width. No fill, so the wrapper returns to shrink-wrapping
-      // the nav the moment the animation ends.
-      //
-      // A collapsed rail is one tile wide here: this layout renders the nav
-      // without the design library's own padding and border (the page draws
-      // that chrome), and the collapsed rail sizes its tile as content, so
-      // nothing is added around it.
-      const targetWidth = effectiveCollapsed
-        ? SIDE_MENU_TILE_SIZE
-        : sidebarWidth;
-      railFocusAnimationsRef.current = [
-        aside.animate(
-          [
-            { width: fromWidth, marginRight: fromMargin },
-            { width: `${targetWidth}px`, marginRight: "0px" },
-          ],
-          { duration: 550, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
-        ),
-        aside.animate([{ opacity: fromOpacity }, { opacity: "1" }], {
-          duration: 250,
-          easing: "ease-out",
-        }),
-      ];
-    }
-  }, [chatFocusActive, sideMenuAside, effectiveCollapsed, sidebarWidth]);
-
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
 
   // The two shapes the conversation list takes, as callbacks the deep-link
@@ -583,12 +479,6 @@ export function ChatLayout({
   const drawerVisible = isMobile && drawerOpen;
 
   const toggleSidebar = useCallback(() => {
-    // The tour forces the rail expanded; a toggle would only flip the
-    // persisted preference invisibly (Ctrl+\ still fires under the tour's
-    // click-blocking overlay), so ignore it for the tour's duration.
-    if (selectTourActive(useInChatOnboardingStore.getState())) {
-      return;
-    }
     haptic.light();
     if (window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
       setDrawerOpen((value) => {
@@ -1081,12 +971,6 @@ export function ChatLayout({
           collapsed={effectiveCollapsed}
           sidebarWidth={sidebarWidth}
           toggleSidebar={toggleSidebar}
-          controlsHidden={headerControlsHidden}
-          centerHidden={headerCenterHidden}
-          // The tour dims the header's clusters for its whole run — no
-          // beat ever focuses them. (Center-hidden is true exactly while
-          // the tour runs, so it doubles as the dim signal.)
-          controlsDimmed={headerCenterHidden}
           topBarCenter={topBarCenter}
           mobileTopBar={mobileTopBar}
           // The voice-session pill is composed here — NOT registered through
@@ -1133,7 +1017,6 @@ export function ChatLayout({
         desktopNavigation={
           <aside
             id="chat-side-menu"
-            ref={setSideMenuAside}
             className="w-fit shrink-0 overflow-hidden"
             aria-label={t("chatLayout.navigationAria")}
           >

@@ -15,7 +15,7 @@ const NativeLaunchScreen =
   registerPlugin<NativeLaunchScreenPlugin>(NATIVE_LAUNCH_SCREEN_PLUGIN);
 
 function nativeLaunchTheme(theme: ThemePreference): NativeLaunchTheme {
-  return theme === "velvet" ? "dark" : theme;
+  return theme;
 }
 
 function isAvailable(): boolean {

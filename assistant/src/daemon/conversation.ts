@@ -657,17 +657,6 @@ export class Conversation {
   /** @internal */ currentTurnIsNonInteractive?: boolean;
   /** @internal */ currentTurnModelProfileNoticeKey?: string;
   /** @internal */ currentTurnRequestOrigin?: string;
-  /**
-   * Whether this turn routes its user-facing text through `send_user_message`,
-   * resolved once at turn start. The agent loop's suppression is pinned to
-   * this value for the whole turn, so the tool surface, the reserved row's
-   * visibility marker, and the prompt section read the same snapshot rather
-   * than the live flag: a remote flag change mid-turn must not mark an
-   * ordinarily streamed row private, nor take the only delivery tool away from
-   * a run that is still suppressing its text.
-   * @internal
-   */
-  currentTurnSendUserMessageActive?: boolean;
   /** @internal */ authContext?: AuthContext;
   /** @internal */ currentTurnAuthContext?: AuthContext;
   /**
@@ -1461,9 +1450,6 @@ export class Conversation {
             rowMeta.deletedAt === undefined &&
             rowMeta.messageId
           ) {
-            // Quote what the channel actually carried: on a row a
-            // `send_user_message` turn wrote, that is the message the tool
-            // delivered, not the private working notes beside it.
             const text = extractTextFromStoredMessageContent(row.content);
             if (text) {
               // A split reply posts several provider messages from one row;

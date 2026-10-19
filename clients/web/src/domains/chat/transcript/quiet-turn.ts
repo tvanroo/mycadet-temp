@@ -9,7 +9,6 @@ import {
   activityItemsToCardData,
   type ContentBlockGroup,
 } from "@/domains/chat/transcript/message-content";
-import { isSendUserMessageCall } from "@/domains/chat/utils/assistant-text-visibility";
 import { isUiSurfaceToolCall } from "@/domains/chat/utils/silent-tool-calls";
 import {
   COMMAND_KEYS,
@@ -162,7 +161,6 @@ export function describeQuietStep(
   toolCall: ChatMessageToolCall,
 ): QuietStep | null {
   if (
-    isSendUserMessageCall(toolCall) ||
     isUiSurfaceToolCall(toolCall) ||
     UNNAMED_TOOL_NAMES.has(toolCall.name)
   ) {
@@ -286,6 +284,6 @@ export function hasQuietTurnProgress(message: {
 }): boolean {
   return !!message.toolCalls?.some(
     (toolCall) =>
-      !isSendUserMessageCall(toolCall) && !isUiSurfaceToolCall(toolCall),
+      !isUiSurfaceToolCall(toolCall),
   );
 }

@@ -589,13 +589,6 @@ export async function runAgentLoopImpl(
   ctx.currentCallSite = turnCallSite;
   ctx.currentTurnSkipMemoryRetrieval = options?.skipMemoryRetrieval === true;
 
-  // Whether this turn routes its user-facing text through `send_user_message`:
-  // the flag is on and the turn is a main-agent turn. Resolved once and pinned
-  // on the conversation, because the loop's suppression is fixed for the whole
-  // run: the tool surface, the reserved row's visibility marker, and the
-  // prompt section all read this snapshot instead of the live flag, so a
-  // remote flag change mid-turn cannot contradict what the run is doing.
-
   // Re-resolve the system prompt under the snapshots just set and push it into
   // the loop when the persona changed. The loop reuses the prompt frozen at
   // construction otherwise, so a flow that binds trust after construction (a
@@ -1952,12 +1945,6 @@ export async function runAgentLoopImpl(
         }
       }
       // The row this turn ends on is no longer the one the last successful
-      // call wrote: it is either nothing, or the synthetic error row built
-      // below, and neither carries an assistant-text visibility marker. Drop
-      // the marker along with the id, so the terminal event cannot label a
-      // visible provider error as private working notes and leave clients
-      // rendering it as activity that never produced a reply.
-      state.lastAssistantTextVisibility = undefined;
       if (!state.persistProviderErrorAsAssistantMessage) {
         state.assistantRowAwaitingFinalization = false;
         state.lastAssistantMessageId = undefined;
@@ -2128,21 +2115,7 @@ export async function runAgentLoopImpl(
       });
       publishLoopMessagesChanged();
     } else {
-      // An attachment belongs on the row whose text asked for it. On a turn
-      // that routed its reply through `send_user_message`, the link the model
-      // wrote is inside that tool's message, while the turn's last row is
-      // private wrap-up text: linking there would leave channel delivery
-      // sending the file from a row with no words on it. Resolve the row the
-      // reply actually lives on, the same one the push preview quotes.
-      const attachmentTargetMessageId =
-        state.lastAssistantTextVisibility === "private" &&
-        state.lastAssistantMessageId
-          ? resolveTurnReplyMessageId(
-              ctx.conversationId,
-              userMessageId,
-              state.lastAssistantMessageId,
-            )
-          : state.lastAssistantMessageId;
+      const attachmentTargetMessageId = state.lastAssistantMessageId;
       const computerUseScreenshotCandidate =
         selectFinalComputerUseScreenshotCandidate(state);
       // Resolve attachments (only when not cancelled, this is expensive async I/O)
@@ -2225,11 +2198,6 @@ export async function runAgentLoopImpl(
             : {}),
           ...(state.lastAssistantMessageId
             ? { messageId: state.lastAssistantMessageId }
-            : {}),
-          // The marker the row was stamped with, so the live row gets the same
-          // per-row treatment the history projection will hand it.
-          ...(state.lastAssistantTextVisibility
-            ? { assistantTextVisibility: state.lastAssistantTextVisibility }
             : {}),
         });
         if (shouldEmitQueuedConversationNotices) {

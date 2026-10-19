@@ -29,26 +29,7 @@ afterEach(() => {
   useClientFeatureFlagStore.setState(initialFlagState, true);
   localStorage.removeItem("device:theme");
   document.documentElement.removeAttribute("data-theme");
-  document.documentElement.classList.remove("dark", "velvet");
+  document.documentElement.classList.remove("dark");
 });
 
-test("a standalone guide preserves a server-enabled Velvet preference", async () => {
-  useAuthStore.setState({ sessionStatus: "unauthenticated" });
-  useClientFeatureFlagStore.setState({ velvet: false });
-  writeStoredThemePreference("velvet");
-  globalThis.fetch = mock(async () =>
-    Response.json({ flags: { velvet: true } }),
-  ) as unknown as typeof fetch;
 
-  render(
-    <QueryClientProvider client={queryClient}>
-      <PermissionGuidePage />
-    </QueryClientProvider>,
-  );
-
-  await waitFor(() => {
-    expect(document.documentElement.getAttribute("data-theme")).toBe(
-      "velvet",
-    );
-  });
-});
