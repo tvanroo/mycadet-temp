@@ -22,6 +22,7 @@ import { installPopoutWindows } from "@mycadet/electron-desktop/popout-window";
 import { installQuickInput } from "@mycadet/electron-desktop/quick-input-window";
 import { planAppProtocolAssetRequest } from "@mycadet/electron-utils/app-protocol";
 import {
+  getLockfileData,
   pairedGatewayTargetsFromLockfile,
   readAllowedGatewayPorts,
   readPairedGatewayTargets,
@@ -296,6 +297,25 @@ const registerAppProtocol = (): void => {
   };
   const { cloudUrl } = resolveLocalConfigFromEnv(process.env);
 
+  // Which platform do the current assistants target? The lockfile's
+  // `cloudBaseUrl` (stamped at hatch/registration) is the source of truth —
+  // the same resolution the CLI (`getCloudUrl`) and the web interface's /v1
+  // proxy use. The env-resolved seed only covers the no-lockfile window;
+  // forwarding on it alone would send platform-only routes (e.g. /v1/releases)
+  // at the local gateway, which does not serve them.
+  const getPlatformCloudUrl = (): string => {
+    const read = getLockfileData(lockfilePaths);
+    const candidates = read.ok
+      ? [read.raw.cloudBaseUrl, read.raw.platformBaseUrl]
+      : [];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+    return cloudUrl;
+  };
+
   protocol.handle(APP_PROTOCOL, async (request) => {
     // The renderer addresses local gateways at the same `app://` origin via
     // `/assistant/__gateway/{port}/*`. Forward those to loopback here so the
@@ -325,7 +345,10 @@ const registerAppProtocol = (): void => {
     }
 
     // Platform API and authentication routes forward to the cloud platform.
-    const platformProxied = await forwardPlatformRequest(request, cloudUrl);
+    const platformProxied = await forwardPlatformRequest(
+      request,
+      getPlatformCloudUrl(),
+    );
     if (platformProxied) return platformProxied;
 
     // The `/assistant` mount serves the web bundle (auxiliary windows and

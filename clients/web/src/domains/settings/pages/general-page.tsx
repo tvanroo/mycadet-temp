@@ -42,7 +42,6 @@ import {
   isLocalClient,
   isCadetCloudRemote,
 } from "@/lib/local-mode";
-import { readInjectedConfig } from "@/lib/injected-config";
 import { isElectron } from "@/runtime/is-electron";
 import { useIsNativeMobile } from "@/runtime/platform-detection";
 import { useIsAuthenticated } from "@/stores/auth-store";
@@ -129,15 +128,12 @@ export function GeneralPage() {
     });
   }, [assistant]);
 
+  // The version rows read assistant state only — the serving host's own
+  // healthz version first, the platform's release version as fallback. The
+  // upgrade panels need a release version for comparisons, so they keep
+  // `versionValue` too.
   const versionValue =
     healthz?.version ?? assistant?.current_release_version ?? null;
-  // Local answers "which one is running" with the serving host's version —
-  // the same string `cadet-local --version` prints, stamped by the host into
-  // `window.__CADET_CONFIG__`. The upgrade panels keep `versionValue`: their
-  // comparisons expect a release version.
-  const injected = readInjectedConfig();
-  const currentVersionDisplay = injected?.version ?? versionValue;
-  const assistantHandle = injected?.assistantId ?? assistant?.id ?? null;
 
   const openAssistantChooser = () => {
     const hubUrl = getRemoteGatewayHubUrl();
@@ -188,8 +184,10 @@ export function GeneralPage() {
       )}
 
       <ProfileCard
-        // Handles are platform-only — withhold the prop for self-hosted assistants.
-        assistant={isCloudHosted ? cloudAssistant : null}
+        // The assistant-handle section doubles as the self-hosted identity
+        // row — local assistants surface their id as the handle (assistant
+        // state carries it).
+        assistant={isCloudHosted ? cloudAssistant : assistant}
         showHandles={isAuthenticated && cloudGate === "full"}
       >
         <TimezoneSection />
@@ -242,7 +240,7 @@ export function GeneralPage() {
                 </span>
               ) : (
                 <span className="break-all text-body-medium-lighter text-[var(--content-default)]">
-                  {currentVersionDisplay ?? "—"}
+                  {versionValue ?? "—"}
                 </span>
               )}
             </div>
@@ -253,14 +251,6 @@ export function GeneralPage() {
             </CloudLoginNotice>
           )}
         </div>
-      </DetailCard>
-      <DetailCard
-        title={t("generalPage.handleTitle")}
-        subtitle={t("generalPage.handleSubtitle")}
-      >
-        <span className="break-all text-body-medium-lighter text-[var(--content-default)]">
-          {assistantHandle ?? "—"}
-        </span>
       </DetailCard>
       {infraGate === "full" && cloudAssistant && (
         <UpdateWindowModal

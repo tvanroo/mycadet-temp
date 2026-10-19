@@ -830,13 +830,6 @@
     "tertiaryText": "Texto terciario: pies de foto, etiquetas y marcadores de posición.",
     "userBubble": "Un mensaje del usuario, en su burbuja."
   },
-  "themeToggle": {
-    "dark": "Oscuro",
-    "label": "Tema",
-    "light": "Claro",
-    "system": "Sistema",
-    "velvet": "Velvet"
-  },
   "ttsProviderForm": {
     "apiKey": "Clave de API",
     "apiKeyRequired": "Guarda una clave de API para este proveedor antes de probar.",

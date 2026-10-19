@@ -693,8 +693,6 @@
     "current": "目前",
     "customize": "自訂",
     "dangerZoneTitle": "危險區域",
-    "handleSubtitle": "為此頁面提供服務的助理。",
-    "handleTitle": "助理識別碼",
     "preferencesSubtitle": "自訂 Cadet 在此裝置上的外觀和行為。",
     "preferencesTitle": "偏好設定",
     "retireAssistantDescription": "永久停用此助理並刪除所有相關資料。",
@@ -1242,18 +1240,13 @@
   },
   "profileEditorFields": {
     "activeLabel": "啟用",
-    "addApiKey": "新增 API 金鑰",
     "advanced": "進階",
-    "createNewProvider": "+ 建立新供應商",
     "descriptionLabel": "描述 <optional>(選填)</optional>",
     "descriptionPlaceholder": "描述何時使用此設定檔",
     "displayNameLabel": "顯示名稱",
     "displayNamePlaceholder": "例如 Claude Opus 4.8",
     "nameLabel": "名稱",
-    "newProviderNote": "新的供應商連線將顯示在「供應商」區段中。",
-    "providerLabel": "供應商",
-    "selectProviderPlaceholder": "選擇供應商…",
-    "setUp": "設定"
+    "newProviderNote": "新的供應商連線將顯示在「供應商」區段中。"
   },
   "profileEditorModal": {
     "cancel": "取消",
