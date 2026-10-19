@@ -72,7 +72,11 @@ beforeEach(() => {
     assistantId: "fixture",
     startedAt: new Date().toISOString(),
   });
-  stampRootProcess("app", { pid: 424243, startedAt: new Date().toISOString() });
+  stampRootProcess("app", {
+    pid: 424243,
+    port: 7841,
+    startedAt: new Date().toISOString(),
+  });
   ngrok.saveNgrokDomain("old.ngrok.app");
   stop = spyOn(processes, "stopProcess").mockResolvedValue(true);
   identity = spyOn(processes, "readProcessCommandLine").mockReturnValue(

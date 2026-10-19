@@ -43,7 +43,11 @@ describe("root process lockfile entries", () => {
   });
 
   test("tunnel and app entries stamp and clear independently", () => {
-    stampRootProcess("app", { pid: 77, startedAt: "2026-10-11T00:00:00.000Z" });
+    stampRootProcess("app", {
+      pid: 77,
+      port: 7841,
+      startedAt: "2026-10-11T00:00:00.000Z",
+    });
     stampRootProcess("tunnel", {
       pid: 78,
       provider: "cloudflare",
@@ -75,7 +79,7 @@ describe("root process lockfile entries", () => {
   });
 
   test("the records live at the lockfile root under their kind keys", () => {
-    stampRootProcess("app", { pid: 1, startedAt: "t" });
+    stampRootProcess("app", { pid: 1, port: 7841, startedAt: "t" });
 
     const raw = z
       .object({

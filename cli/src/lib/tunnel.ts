@@ -6,7 +6,7 @@ import {
   loadAllAssistantsAcrossEnvs,
   readRootProcesses,
   type AssistantEntry,
-  type RootProcessRecord,
+  type TunnelProcessRecord,
 } from "./assistant-config.js";
 
 import {
@@ -171,7 +171,7 @@ export interface ProviderTunnelResult {
 }
 
 export interface ProviderStopOptions {
-  record: RootProcessRecord;
+  record: TunnelProcessRecord;
   assistantId?: string;
   workspaceDir?: string;
 }
@@ -228,7 +228,7 @@ export async function stopTunnelProcess(
   assistantId?: string,
   workspaceDir?: string,
 ): Promise<boolean> {
-  const recorded: RootProcessRecord | undefined = readRootProcesses().tunnel;
+  const recorded: TunnelProcessRecord | undefined = readRootProcesses().tunnel;
   if (!recorded) return false;
   if (
     assistantId &&

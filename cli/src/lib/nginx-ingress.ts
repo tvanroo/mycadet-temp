@@ -236,7 +236,6 @@ function remoteWebIngressConfig(
     remote: edgeServedRemote(
       opts.assistantId ? lockfileAssistantRemote(opts.assistantId) : undefined,
     ),
-    apiBaseUrl: "/v1",
     ...(opts.assistantName ? { assistantName: opts.assistantName } : {}),
     ...(opts.assistantId ? { assistantId: opts.assistantId } : {}),
     ...(opts.hubUrl ? { hubUrl: opts.hubUrl } : {}),
@@ -1034,9 +1033,9 @@ export function startIngressNginx(opts: {
       buildRemoteWebIndexHtml(rawIndexHtml, remoteWebIngress.config),
     );
     if (remoteWebIngress.appDistDir) {
-      // The app shell gets its own injected document: same remote-web config
-      // (its readers ignore the web-only apiBaseUrl key), written beside the
-      // web one so the generated locations can alias it internally.
+      // The app shell gets its own injected document: the same remote-web
+      // config, written beside the web one so the generated locations can
+      // alias it internally.
       const rawAppIndexHtml = readFileSync(
         join(remoteWebIngress.appDistDir, "index.html"),
         "utf-8",

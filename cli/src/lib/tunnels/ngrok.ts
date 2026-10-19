@@ -17,7 +17,7 @@ import {
   clearRootProcess,
   readRootProcesses,
   stampRootProcess,
-  type RootProcessRecord,
+  type TunnelProcessRecord,
 } from "../assistant-config.js";
 import { ensureBinaryInstalled, readLineText } from "../ensure-binary.js";
 import {
@@ -549,9 +549,9 @@ export function isNgrokProcess(pid: number): boolean {
  * themselves — is left alone.
  */
 export function staleTrackedNgrokAgent(
-  record: RootProcessRecord | undefined,
+  record: TunnelProcessRecord | undefined,
   matchesPid: (pid: number) => boolean = isNgrokProcess,
-): RootProcessRecord | null {
+): TunnelProcessRecord | null {
   if (!record || record.provider !== "ngrok") return null;
   if (!matchesPid(record.pid)) return null;
   return record;
@@ -618,10 +618,10 @@ export function untrackedNgrokHolderPid(
  * the fresh agent then surfaces ngrok's own refusal again).
  */
 async function stopConfirmedNgrokAgent(
-  stale: RootProcessRecord,
+  stale: TunnelProcessRecord,
   assistantId: string | undefined,
   workspaceDir: string | undefined,
-): Promise<RootProcessRecord | null> {
+): Promise<TunnelProcessRecord | null> {
   try {
     const stopped = await stopOwnedTunnelAgent(
       { record: stale, assistantId, workspaceDir },

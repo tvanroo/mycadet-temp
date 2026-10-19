@@ -14,6 +14,9 @@ import { AssistantPage } from "@app/shell/assistant-page";
 import { assistantSelectionState } from "@app/assistant/assistant-selection";
 
 const request = spyOn(globalThis, "fetch");
+const iframeDocument = new Response("<!doctype html><html></html>", {
+  headers: { "content-type": "text/html" },
+});
 const originalConfig = Object.getOwnPropertyDescriptor(
   window,
   "__CADET_CONFIG__",
@@ -34,6 +37,13 @@ function setup(
     | { pathname: string; state: unknown } = "/account/select-assistant",
   useAccountRoute = false,
 ) {
+  // The shell resolves assistants same-origin now, so the mounted iframe's
+  // own document is fetched from the test origin; answer it quietly.
+  request.mockImplementation(
+    Object.assign(async () => iframeDocument.clone(), {
+      preconnect: fetch.preconnect,
+    }),
+  );
   Object.defineProperty(window, "__CADET_CONFIG__", {
     configurable: true,
     value: host,
@@ -82,14 +92,20 @@ test("the account route lists names, defaulting unnamed assistants, then resolve
   fireEvent.click(screen.getByRole("button", { name: "New Assistant" }));
   const frame = await screen.findByTitle("Assistant");
   expect(frame.getAttribute("src")).toBe(
-    "https://host.example/admin/proxy/web/1.2.3/assistant/",
+    "http://localhost:3001/web/1.2.3/assistant/",
   );
   expect(router.state.location.state).toEqual(
-    assistantSelectionState("assistant-2", host),
+    assistantSelectionState("assistant-2"),
   );
-  expect(request.mock.calls.map(([url]) => String(url))).toEqual([
+  // The account picker lists from the cloud base; the shell resolves the
+  // chosen assistant from its own origin, which routes /v1 to the gateway.
+  expect(
+    request.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes("/v1/")),
+  ).toEqual([
     "https://host.example/admin/proxy/v1/assistants/?limit=100&offset=0",
-    "https://host.example/admin/proxy/v1/assistants/assistant-2/",
+    "http://localhost:3001/v1/assistants/assistant-2/",
   ]);
   expect(request.mock.calls[0][1]?.credentials).toBe("include");
 });
@@ -162,7 +178,7 @@ test("browser history restores selection and frame navigation retains it", async
   request.mockResolvedValueOnce(Response.json(detail));
   const router = setup({
     pathname: "/assistant/files",
-    state: assistantSelectionState("assistant-2", host),
+    state: assistantSelectionState("assistant-2"),
   });
   const frame = await screen.findByTitle("Assistant");
   if (!(frame instanceof HTMLIFrameElement)) {
@@ -173,7 +189,7 @@ test("browser history restores selection and frame navigation retains it", async
     window.dispatchEvent(
       new MessageEvent("message", {
         source: frame.contentWindow,
-        origin: "https://host.example",
+        origin: "http://localhost:3001",
         data: {
           source: "mycadet-web-nav",
           nav: "push",
@@ -184,7 +200,7 @@ test("browser history restores selection and frame navigation retains it", async
   });
   expect(router.state.location.pathname).toBe("/assistant/settings");
   expect(router.state.location.state).toEqual(
-    assistantSelectionState("assistant-2", host),
+    assistantSelectionState("assistant-2"),
   );
   expect(request).toHaveBeenCalledTimes(1);
 });

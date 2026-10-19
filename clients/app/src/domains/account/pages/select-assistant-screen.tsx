@@ -34,7 +34,7 @@ export function SelectAssistantScreen() {
               variant="outlined"
               onClick={() => {
                 void navigate(routes.assistant, {
-                  state: assistantSelectionState(assistant.id, config ?? {}),
+                  state: assistantSelectionState(assistant.id),
                 });
               }}
             >

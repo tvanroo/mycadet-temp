@@ -48,6 +48,7 @@ describe("ingress shell mode setting", () => {
   test("a lockfile without the key reads as the web default", () => {
     stampRootProcess("app", {
       pid: 7840,
+      port: 7841,
       startedAt: "2026-10-16T00:00:00.000Z",
     });
     expect(readShellMode()).toBe(DEFAULT_SHELL_MODE);
@@ -64,6 +65,7 @@ describe("ingress shell mode setting", () => {
   test("saving lands at the lockfile root beside the app record", () => {
     stampRootProcess("app", {
       pid: 7840,
+      port: 7841,
       startedAt: "2026-10-16T00:00:00.000Z",
     });
     saveShellMode("app");

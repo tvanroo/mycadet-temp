@@ -134,35 +134,57 @@ interface LockfileData {
   assistants?: Record<string, unknown>[];
   activeAssistant?: string;
   cloudBaseUrl?: string;
-  tunnel?: RootProcessRecord;
-  app?: RootProcessRecord;
+  tunnel?: TunnelProcessRecord;
+  app?: AppProcessRecord;
   /** The nginx edge's shell selection; see readEdgeShellSelection. */
   edgeShell?: unknown;
   [key: string]: unknown;
 }
 
 /**
- * A CLI-managed OS process recorded at the lockfile root, keyed by what it is
- * for — `tunnel` (the auto-tunnel agent fronting the edge) and `app` (the
- * nginx ingress edge). `cadet ps` renders these alongside the per-assistant
- * process trees, and the stop paths verify the pid before signaling it.
+ * A CLI-managed OS process recorded at the lockfile root under `tunnel`:
+ * the auto-tunnel agent fronting the edge. `cadet ps` renders it alongside
+ * the per-assistant process trees, and the stop paths verify the pid before
+ * signaling it.
  */
-export interface RootProcessRecord {
+export interface TunnelProcessRecord {
   pid: number;
-  /** Which tunnel provider owns the process; "tunnel" entries only. */
-  provider?: string;
+  /** Which tunnel provider owns the process. */
+  provider: string;
   /** The assistant the process fronts, so `cadet ps` can nest the row. */
   assistantId?: string;
   startedAt: string;
-  /** Listening port for the nginx edge. */
-  port?: number;
-  /** The public URL the tunnel agent serves; "tunnel" entries only. */
+  /** The public URL the tunnel agent serves. */
   publicUrl?: string;
-  /** Managed process temporarily displaced by a pairing-only tunnel. */
-  previous?: RootProcessRecord;
+  /** Tunnel temporarily displaced by a pairing-only tunnel. */
+  previous?: TunnelProcessRecord;
 }
 
-export type RootProcessKind = "tunnel" | "app";
+/**
+ * A CLI-managed OS process recorded at the lockfile root under `app`: the
+ * nginx ingress edge (web artifacts, `/v1` proxying, the outer shell).
+ * Shares nothing with the tunnel record beyond the pid bookkeeping — a
+ * tunnel serves a URL, the edge serves a port.
+ */
+export interface AppProcessRecord {
+  pid: number;
+  /** The assistant the edge fronts, so `cadet ps` can nest the row. */
+  assistantId?: string;
+  startedAt: string;
+  /** Listening port for the nginx edge. */
+  port: number;
+}
+
+/** Either lockfile-root process record, keyed by `RootProcessKind`. */
+export type RootProcessRecord = TunnelProcessRecord | AppProcessRecord;
+
+/** The lockfile-root process entries keyed by their kind. */
+export interface RootProcessRecords {
+  tunnel?: TunnelProcessRecord;
+  app?: AppProcessRecord;
+}
+
+export type RootProcessKind = keyof RootProcessRecords;
 
 /**
  * Derive the daemon PID file path from a resources object. The PID file
@@ -226,13 +248,13 @@ function withCliLockfileLock<T>(fn: () => T): T {
 }
 
 /** Record a CLI-managed root process (tunnel agent, app edge) by pid. */
-export function stampRootProcess(
-  kind: RootProcessKind,
-  record: RootProcessRecord,
+export function stampRootProcess<K extends RootProcessKind>(
+  kind: K,
+  record: RootProcessRecords[K],
 ): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
-    data[kind] = record;
+    (data as RootProcessRecords)[kind] = record;
     writeLockfileUnlocked(data);
   });
 }
@@ -244,13 +266,16 @@ export function clearRootProcess(
 ): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
-    const record = data[kind];
+    const record = (data as RootProcessRecords)[kind];
     if (
       record === undefined ||
       (expectedPid !== undefined && record.pid !== expectedPid)
     )
       return;
-    if (record.previous) data[kind] = record.previous;
+    // Only a tunnel record carries a displaced predecessor to restore.
+    const previous =
+      kind === "tunnel" ? (record as TunnelProcessRecord).previous : undefined;
+    if (previous) (data as RootProcessRecords).tunnel = previous;
     else delete data[kind];
     writeLockfileUnlocked(data);
   });
@@ -260,11 +285,8 @@ export function clearRootProcess(
  * Read the root-level process entries for `cadet ps`. Read-only: no lock, so
  * a concurrently-updating lockfile is fine — the pid is verified separately.
  */
-export function readRootProcesses(): {
-  tunnel?: RootProcessRecord;
-  app?: RootProcessRecord;
-} {
-  const data = readLockfile();
+export function readRootProcesses(): RootProcessRecords {
+  const data = readLockfile() as LockfileData & RootProcessRecords;
   return { tunnel: data.tunnel, app: data.app };
 }
 

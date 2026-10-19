@@ -4,39 +4,20 @@ import {
   selectedAssistantId,
 } from "./assistant-selection";
 
-test("route selection is scoped to its API base", () => {
-  const host = {
-    cloudUrl: "https://host.example/admin/",
-  };
-  const state = assistantSelectionState("assistant-2", host);
-  expect(selectedAssistantId(state, host)).toBe("assistant-2");
-  expect(
-    selectedAssistantId(state, { ...host, cloudUrl: "/" }),
-  ).toBeUndefined();
-  expect(
-    selectedAssistantId(assistantSelectionState("assistant-1", {}), {}),
-  ).toBe("assistant-1");
+test("selection state carries the same-origin base as its scope tag", () => {
+  const state = assistantSelectionState("assistant-2");
+  expect(state.assistantSelection.apiBaseUrl).toBe("/");
+  expect(selectedAssistantId(state)).toBe("assistant-2");
 });
 
-test("host-injected same-origin base scopes the selection instead of cloud", () => {
-  const host = {
-    apiBaseUrl: "/v1",
-    cloudUrl: "https://cloud.mycadet.ai",
-  };
-  const state = assistantSelectionState("assistant-2", host);
-  expect(state.assistantSelection.apiBaseUrl).toBe("/v1");
-  expect(selectedAssistantId(state, host)).toBe("assistant-2");
-  // A cloud-base tag must not survive where the edge injects the same-origin base.
+test("a selection tagged with a foreign API base never resolves", () => {
   expect(
-    selectedAssistantId(
-      {
-        assistantSelection: {
-          id: "assistant-2",
-          apiBaseUrl: "https://cloud.mycadet.ai",
-        },
+    selectedAssistantId({
+      assistantSelection: {
+        id: "assistant-2",
+        apiBaseUrl: "https://cloud.mycadet.ai",
       },
-      host,
-    ),
+    }),
   ).toBeUndefined();
 });
 
@@ -48,6 +29,6 @@ test("malformed browser history never supplies an assistant selection", () => {
     { assistantSelection: { id: 123, apiBaseUrl: "/" } },
     { assistantSelection: { id: "", apiBaseUrl: "/" } },
   ]) {
-    expect(selectedAssistantId(value, {})).toBeUndefined();
+    expect(selectedAssistantId(value)).toBeUndefined();
   }
 });
