@@ -43,6 +43,7 @@ import {
   CLOUDFLARE_TUNNEL_META,
 } from "./tunnels/cloudflare.js";
 import {
+  recoverTailscaleIngressUrl,
   TAILSCALE_PROVIDER,
   TAILSCALE_TUNNEL_META,
 } from "./tunnels/tailscale.js";
@@ -360,6 +361,26 @@ export async function restoreTunnelEdge(
    *  which is what keeps webhook delivery alive without an edge. */
   gatewayFallback = true,
 ): Promise<number | null> {
+  // The gateway clears a tunnel-managed ingress URL whenever it starts, and
+  // the local gateway has just been started. A tailnet serve outlives that
+  // (tailscaled keeps the mapping), so put its URL back before deciding
+  // whether anything wants the edge. Non-fatal: a failed probe just leaves
+  // the config as the gateway left it.
+  try {
+    const recovered = await recoverTailscaleIngressUrl({
+      workspaceDir,
+      assistantId,
+    });
+    if (recovered) {
+      console.log(
+        `   Restored the tailnet ingress URL ${recovered} (the gateway start had cleared it).`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `   Could not check the saved tailnet serve: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (!wantsTunnelEdge(workspaceDir)) {
     return null;
   }
