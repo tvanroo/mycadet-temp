@@ -8,7 +8,6 @@
  */
 
 import type { DisplayMessage } from "@/domains/chat/types/types";
-import { isSendUserMessageCall } from "@/domains/chat/utils/assistant-text-visibility";
 import { isToolCallRunning } from "@/domains/chat/utils/tool-call-status";
 import type {
   AnsweredQuestion,
@@ -54,29 +53,6 @@ function upsertToolUseBlock(
 }
 
 /**
- * The visibility a `send_user_message` call implies for the row carrying it: a
- * turn that speaks through the tool keeps its prose private.
- *
- * The daemon announces the call while its input is still streaming, well
- * before `message_complete` carries the authoritative marker, and a turn can
- * send one reply and go on working. Marking the row here is what keeps an
- * already-sent reply reading as the reply for the rest of the turn instead of
- * being folded into "Earlier activity" the moment a later one starts.
- *
- * Only an unmarked row is stamped, so `message_complete` still decides: a row
- * it marks `"visible"` (the turn's own text was the reply) stays visible.
- */
-function impliedVisibility(
-  row: DisplayMessage,
-  toolCall: ChatMessageToolCall,
-): Pick<DisplayMessage, "assistantTextVisibility"> | undefined {
-  if (row.assistantTextVisibility || !isSendUserMessageCall(toolCall)) {
-    return undefined;
-  }
-  return { assistantTextVisibility: "private" };
-}
-
-/**
  * Fold a tool call into the assistant row at `idx`, either updating the
  * existing entry (same `toolCall.id`) or appending a new one with a
  * matching `contentOrder` entry. The `contentBlocks` `tool_use` entry is
@@ -93,7 +69,6 @@ function upsertToolCallIntoRow(
   const existingIdx =
     row.toolCalls?.findIndex((tc) => tc.id === toolCall.id) ?? -1;
   const updated = [...prev];
-  const visibility = impliedVisibility(row, toolCall);
 
   if (existingIdx !== -1) {
     const updatedToolCalls = [...(row.toolCalls ?? [])];
@@ -101,7 +76,6 @@ function upsertToolCallIntoRow(
     updatedToolCalls[existingIdx] = merged;
     updated[idx] = {
       ...row,
-      ...visibility,
       ...(modeSession ? { modeSession } : {}),
       toolCalls: updatedToolCalls,
       contentBlocks: upsertToolUseBlock(row.contentBlocks, merged),
@@ -111,7 +85,6 @@ function upsertToolCallIntoRow(
 
   updated[idx] = {
     ...row,
-    ...visibility,
     ...(modeSession ? { modeSession } : {}),
     toolCalls: [...(row.toolCalls ?? []), toolCall],
     contentOrder: [
@@ -176,9 +149,6 @@ export function upsertToolCall(
       ...(messageId ? {} : { isOptimistic: true }),
       role: "assistant" as const,
       ...(modeSession ? { modeSession } : {}),
-      ...(isSendUserMessageCall(toolCall)
-        ? { assistantTextVisibility: "private" as const }
-        : {}),
       toolCalls: [toolCall],
       contentOrder: [{ type: "toolCall", id: toolCall.id }],
       contentBlocks: [{ type: "tool_use", toolCall }],

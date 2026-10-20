@@ -1,4 +1,5 @@
 import { isCloudHome } from "../lib/cloud-values.js";
+import { cliCommand } from "../lib/cli-name.js";
 import {
   existsSync,
   mkdirSync,
@@ -34,7 +35,7 @@ import {
 import { restoreRootBackup, validateRootArchive } from "../lib/root-backup.js";
 
 function printUsage(): void {
-  console.log("Usage: cadet restore <name> [--from <path>] [--dry-run]");
+  console.log(`Usage: ${cliCommand()} restore <name> [--from <path>] [--dry-run]`);
   console.log("");
   console.log(
     "Restore all persistent roots from a tar archive into an assistant.",
@@ -54,10 +55,10 @@ function printUsage(): void {
   );
   console.log("");
   console.log("Examples:");
-  console.log("  cadet restore my-retired-assistant");
-  console.log("  cadet restore my-assistant --from backup.tar.gz");
-  console.log("  cadet restore my-cloud-assistant --from backup.tar.gz");
-  console.log("  cadet restore my-assistant --from backup.tar.gz --dry-run");
+  console.log(`  ${cliCommand()} restore my-retired-assistant`);
+  console.log(`  ${cliCommand()} restore my-assistant --from backup.tar.gz`);
+  console.log(`  ${cliCommand()} restore my-cloud-assistant --from backup.tar.gz`);
+  console.log(`  ${cliCommand()} restore my-assistant --from backup.tar.gz --dry-run`);
 }
 
 function parseArgs(argv: string[]): {
@@ -152,7 +153,7 @@ async function restorePlatform(
   // Step 1 — Authenticate
   const token = readCloudToken();
   if (!token) {
-    console.error("Not logged in. Run 'cadet login' first.");
+    console.error(`Not logged in. Run '${cliCommand()} login' first.`);
     process.exit(1);
   }
 
@@ -192,7 +193,7 @@ async function restorePlatform(
       preflightResult.statusCode === 401 ||
       preflightResult.statusCode === 403
     ) {
-      console.error("Authentication failed. Run 'cadet login' to refresh.");
+      console.error(`Authentication failed. Run '${cliCommand()} login' to refresh.`);
       process.exit(1);
     }
 
@@ -300,7 +301,7 @@ async function restorePlatform(
   }
 
   if (importResult.statusCode === 401 || importResult.statusCode === 403) {
-    console.error("Authentication failed. Run 'cadet login' to refresh.");
+    console.error(`Authentication failed. Run '${cliCommand()} login' to refresh.`);
     process.exit(1);
   }
 
@@ -552,7 +553,7 @@ export const restore = Object.assign(
     const entry = findAssistantByName(name);
     if (!entry) {
       console.error(`Error: No assistant found with name '${name}'.`);
-      console.error("Run 'cadet ps' to see available assistants.");
+      console.error(`Run '${cliCommand()} ps' to see available assistants.`);
       process.exit(1);
     }
 

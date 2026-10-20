@@ -12,14 +12,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CADET_GITHUB_REPOSITORY_URL } from "@mycadet/shared";
+
 import { useNudgeStore } from "@/stores/nudge-store";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Public GitHub repository for Cadet. */
-export const GITHUB_REPO_URL = "https://github.com/cadet-ai/mycadet";
 
 /** Minimum account age (ms since first observation) before the nudge is eligible. */
 export const GITHUB_MIN_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -130,5 +129,5 @@ export function openGitHubRepo(): void {
   if (typeof window === "undefined") {
     return;
   }
-  window.open(GITHUB_REPO_URL, "_blank", "noopener,noreferrer");
+  window.open(CADET_GITHUB_REPOSITORY_URL, "_blank", "noopener,noreferrer");
 }

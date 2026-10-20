@@ -61,7 +61,7 @@ import {
   storePayload,
 } from "../../../persistence/delivery-crud.js";
 import { markProcessed } from "../../../persistence/delivery-status.js";
-import { userFacingTextOfRow } from "../../../persistence/user-facing-content.js";
+import { extractTextFromStoredMessageContent } from "../../../persistence/message-content.js";
 import { getLogger } from "../../../util/logger.js";
 import { toTrustContext } from "../../actor-trust-resolver.js";
 import { DAEMON_INTERNAL_ASSISTANT_ID } from "../../assistant-scope.js";
@@ -387,11 +387,9 @@ function buildReactionWakeTurn(params: {
 
   const facts = reactionFacts(params);
   const neutralMeta = buildNeutralReactionMeta(facts);
-  // Quote what was actually posted: on a row a `send_user_message` turn marked
-  // private, that is the message the tool delivered, not the working notes
-  // beside it. Matches how the reload-time renderer and the reaction-target
-  // index read the same row.
-  const targetText = userFacingTextOfRow(targetRow.content, targetRow.metadata);
+  // Quote what was actually posted. Matches how the reload-time renderer and
+  // the reaction-target index read the same row.
+  const targetText = extractTextFromStoredMessageContent(targetRow.content);
   const content = renderReactionHistoryText(
     neutralMeta,
     () => targetText || undefined,

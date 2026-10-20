@@ -317,15 +317,6 @@
     "title": "Security",
     "useForSignIn": "Use {label} for sign-in"
   },
-  "bookmarksPage": {
-    "emptyDescription": "Hover any message and click the bookmark icon to save it here.",
-    "emptyTitle": "No bookmarks",
-    "errorDescription": "Something went wrong. Please try again.",
-    "errorTitle": "Failed to load bookmarks",
-    "open": "Open",
-    "removeBookmark": "Remove bookmark",
-    "retry": "Retry"
-  },
   "bulkOverrideSwapModal": {
     "affectedSummary": "{count, plural, one {# action currently uses {profile}} other {# actions currently use {profile}}}",
     "applyTo": "{count, plural, one {Apply to # action} other {Apply to # actions}}",
@@ -700,8 +691,6 @@
     "current": "Current",
     "customize": "Customize",
     "dangerZoneTitle": "Danger Zone",
-    "handleSubtitle": "The assistant serving this page.",
-    "handleTitle": "Assistant handle",
     "preferencesSubtitle": "Customize how Cadet looks and behaves on this device.",
     "preferencesTitle": "Preferences",
     "retireAssistantDescription": "Permanently retire this assistant and delete all associated data.",
@@ -1727,8 +1716,7 @@
     "dark": "Dark",
     "light": "Light",
     "system": "System",
-    "title": "Theme",
-    "velvet": "Velvet"
+    "title": "Theme"
   },
   "tierPicker": {
     "machineAriaLabel": "Machine tier",
@@ -2100,38 +2088,6 @@
     "redirectUrl": "Redirect URL",
     "waitingAuthorization": "Waiting for authorization..."
   },
-  "personalityPage": {
-    "axes": {
-      "companionCoworker": {
-        "left": "Companion",
-        "right": "Coworker"
-      },
-      "executeCollaborate": {
-        "left": "Independent",
-        "right": "Collaborative"
-      },
-      "genzBoomer": {
-        "left": "Gen Z",
-        "right": "Baby Boomer"
-      },
-      "playfulSerious": {
-        "left": "Playful",
-        "right": "Serious"
-      },
-      "politeUnfiltered": {
-        "left": "Polite",
-        "right": "Unfiltered"
-      }
-    },
-    "loadError": "Could not load personality sliders.",
-    "rangeAriaLabel": "{left} to {right}",
-    "save": "Save",
-    "saveErrorToast": "Could not save personality sliders. Please try again.",
-    "saveSuccessToast": "Personality sliders saved.",
-    "saving": "Saving…",
-    "subtitle": "Save the slider values to this assistant. This does not rewrite identity files.",
-    "title": "Personality"
-  },
   "sidebar": {
     "general": "General",
     "model": "Models & Services",
@@ -2141,12 +2097,10 @@
     "voice": "Voice",
     "sounds": "Sounds",
     "privacy": "Permissions & Privacy",
-    "bookmarks": "Bookmarks",
     "usage": "Usage",
     "billingUsage": "Billing & Usage",
     "community": "Community",
     "debug": "Debug",
-    "personality": "Personality",
     "logout": "Log Out",
     "login": "Log In",
     "title": "Settings"

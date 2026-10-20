@@ -51,11 +51,6 @@ mock.module("@/lib/billing/checkout-intent", () => ({
   saveCheckoutIntent: mock((_intent: unknown) => {}),
 }));
 
-// `marketing-pricing-takeover` state — the pricing funnel kill switch.
-let takeoverValue = "enabled";
-mock.module("@/hooks/use-marketing-pricing-takeover", () => ({
-  useMarketingPricingTakeover: () => takeoverValue,
-}));
 
 mock.module("@/runtime/is-electron", () => ({ isElectron: () => true }));
 // Mutable platform/flag state so individual tests can flip them.
@@ -141,7 +136,6 @@ describe("PrivacyScreen — Start navigation", () => {
     nativePlatform = false;
     localMode = false;
     checkoutIntentValue = null;
-    takeoverValue = "enabled";
     useResolvedAssistantsStore.setState({ assistants: [] });
     clearSelectedAssistantId();
   });
@@ -150,7 +144,6 @@ describe("PrivacyScreen — Start navigation", () => {
     nativePlatform = false;
     localMode = false;
     checkoutIntentValue = null;
-    takeoverValue = "enabled";
     useResolvedAssistantsStore.setState({ assistants: [] });
     clearSelectedAssistantId();
   });
@@ -312,67 +305,10 @@ describe("PrivacyScreen — Start navigation", () => {
     expect(navigatedQuery().get("package")).toBe("super");
   });
 
-  test("drops the carried package and proceeds when the pricing funnel is off", () => {
-    // Kill switch flipped between the pricing CTA and this click. Handing off
-    // would land on a checkout route that bounces to plans, dropping the user
-    // out of onboarding before research runs.
-    takeoverValue = "disabled";
-    checkoutIntentValue = {
-      kind: "package",
-      packageKey: "super",
-      savedAt: Date.now(),
-      resumeAfterOnboarding: true,
-    };
-    searchParamsValue = new URLSearchParams("hosting=managed");
-    render(<PrivacyScreen />);
-
-    clickStart();
-
-    expect(clearCheckoutIntentMock).toHaveBeenCalledTimes(1);
-    expect(navigateMock).toHaveBeenCalledTimes(1);
-    const target = navigateMock.mock.calls[0]?.[0] as string;
-    expect(target.startsWith(routes.onboarding.research)).toBe(true);
-    expect(target).not.toContain(routes.checkout);
-  });
-
-  test("still resumes while the funnel flag is unresolved, carrying the onboarding step", () => {
-    // The flag defaults off; dropping the package before its real value lands
-    // would strand every legitimate pricing signup, and blocking Start until it
-    // resolves would put a network round-trip in front of the most important
-    // click in onboarding. So hand off — but carry the step this click would
-    // otherwise have taken, so a pending→disabled transition lands back in the
-    // funnel rather than on the plans takeover.
-    takeoverValue = "pending";
-    checkoutIntentValue = {
-      kind: "package",
-      packageKey: "super",
-      savedAt: Date.now(),
-      resumeAfterOnboarding: true,
-    };
-    searchParamsValue = new URLSearchParams(
-      "hosting=managed&plugin=coffee-aficionado",
-    );
-    render(<PrivacyScreen />);
-
-    clickStart();
-
-    expect(clearCheckoutIntentMock).not.toHaveBeenCalled();
-    const target = navigateMock.mock.calls[0]?.[0] as string;
-    expect(target.startsWith(`${routes.checkout}?`)).toBe(true);
-    const query = navigatedQuery();
-    expect(query.get("package")).toBe("super");
-    // The continuation is the exact URL the non-checkout branch would have
-    // navigated to, attribution and hosting included.
-    expect(query.get("continue")).toBe(
-      `${routes.onboarding.research}?hosting=managed&plugin=coffee-aficionado`,
-    );
-  });
-
   test("the carried continuation follows the local-hatch destination", () => {
     // Local hosting must run the foreground hatch first, so the continuation is
     // `hatching`, not `research` — the checkout bail has to resume the same step
     // the standard branch would have.
-    takeoverValue = "pending";
     localMode = true;
     checkoutIntentValue = {
       kind: "package",
@@ -477,28 +413,6 @@ describe("PrivacyScreen — Start navigation", () => {
 
     clickStart();
 
-    expect(navigateMock).toHaveBeenCalledTimes(1);
-    const target = navigateMock.mock.calls[0]?.[0] as string;
-    expect(target.startsWith(routes.onboarding.research)).toBe(true);
-    expect(target).not.toContain(routes.checkout);
-  });
-
-  test("drops the carried custom config and proceeds when the pricing funnel is off", () => {
-    takeoverValue = "disabled";
-    checkoutIntentValue = {
-      kind: "custom",
-      machineTier: "medium",
-      storageTier: "m",
-      creditTier: null,
-      savedAt: Date.now(),
-      resumeAfterOnboarding: true,
-    };
-    searchParamsValue = new URLSearchParams("hosting=managed");
-    render(<PrivacyScreen />);
-
-    clickStart();
-
-    expect(clearCheckoutIntentMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledTimes(1);
     const target = navigateMock.mock.calls[0]?.[0] as string;
     expect(target.startsWith(routes.onboarding.research)).toBe(true);
@@ -614,7 +528,6 @@ describe("PrivacyScreen — Skip to chat", () => {
     nativePlatform = false;
     localMode = false;
     checkoutIntentValue = null;
-    takeoverValue = "enabled";
   });
   afterEach(() => {
     env.VITE_ENVIRONMENT = previousEnv;
@@ -622,7 +535,6 @@ describe("PrivacyScreen — Skip to chat", () => {
     nativePlatform = false;
     localMode = false;
     checkoutIntentValue = null;
-    takeoverValue = "enabled";
   });
 
   test("saves consent and hatches, skipping the research funnel", () => {

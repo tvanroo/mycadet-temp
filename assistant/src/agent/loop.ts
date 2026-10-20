@@ -3,7 +3,6 @@ import type { ToolActivityMetadata } from "../api/events/tool-result.js";
 import { resolveCallSiteConfig } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite } from "../config/schemas/llm.js";
-import { SEND_USER_MESSAGE_TOOL_NAME } from "../config/send-user-message-constants.js";
 import { recordEstimate } from "../context/estimator-calibration.js";
 import { preModelCallSanitize } from "../context/outbound-sanitize.js";
 import { stripInjectionsForCompaction } from "../context/strip-injections.js";
@@ -38,7 +37,6 @@ import {
   timeSyncSection,
   traceAsyncSection,
 } from "../persistence/slow-sync-log.js";
-import type { AssistantTextVisibility } from "../persistence/user-facing-content.js";
 import { HOOKS } from "../plugin-api/constants.js";
 import { defaultCompact } from "../plugins/defaults/compaction/compact.js";
 import type { ContextWindowResult } from "../plugins/defaults/compaction/window-manager.js";
@@ -80,7 +78,6 @@ import {
 } from "../util/abort-reasons.js";
 import { ProviderError } from "../util/errors.js";
 import { getLogger } from "../util/logger.js";
-import { joinDeliveredMessages } from "../util/text-spacing.js";
 import { CompactionCircuit } from "./compaction-circuit.js";
 import {
   deepRepairHistory,
@@ -93,56 +90,6 @@ const log = getLogger("agent-loop");
 
 const MAX_CONSECUTIVE_UNPARSEABLE_TOOL_TURNS = 3;
 const SKILL_EXECUTE_TOOL_NAME = "skill_execute";
-
-/**
- * The user-facing message a `send_user_message` block carries, or null when
- * the block is not one or carries nothing usable.
- *
- * One predicate for the two readers that must agree: what gets streamed to the
- * user, and what counts as having told them the outcome. A call whose
- * `message` is blank or not a string is rejected by the executor and streams
- * nothing, so counting it as delivery would suppress the raw-text fallback on
- * a later turn and leave the user with no reply at all.
- */
-function deliveredUserMessage(block: {
-  type: string;
-  name?: string;
-  input?: Record<string, unknown>;
-}): string | null {
-  if (block.type !== "tool_use" || block.name !== SEND_USER_MESSAGE_TOOL_NAME) {
-    return null;
-  }
-  const message = block.input?.["message"];
-  return typeof message === "string" && message.trim().length > 0
-    ? message
-    : null;
-}
-
-/**
- * Whether a response reported the OUTCOME of the work before it: it called
- * tools, and every one of them delivered a message to the user.
- *
- * `undefined` when the response called no tools, which is the terminal one and
- * leaves the answer where the last tool-bearing response left it.
- *
- * One rule, read by the loop's own fallback decision and handed to the
- * `post-model-call` hook chain on the context, so the plugin that owns the
- * nudge cannot reach a different answer than the loop that owns the fallback.
- * A plugin cannot import this (plugins are self-contained), so the host
- * computes it and passes the answer.
- */
-function reportsOutcomeToUser(
-  toolUseBlocks: ReadonlyArray<{
-    type: string;
-    name?: string;
-    input?: Record<string, unknown>;
-  }>,
-): boolean | undefined {
-  if (toolUseBlocks.length === 0) {
-    return undefined;
-  }
-  return toolUseBlocks.every((block) => deliveredUserMessage(block) !== null);
-}
 
 /** Fraction of the preflight budget at which a checkpoint triggers mid-loop compaction. */
 const MID_LOOP_YIELD_THRESHOLD_RATIO = 0.85;
@@ -337,20 +284,7 @@ export type AgentEvent =
    * including per-call reroutes by a `pre-model-call` hook. Absent on
    * synthesized emissions that have no provider response.
    */
-  /**
-   * `assistantTextVisibility` is set only on a run with
-   * {@link AgentLoopRunOptionsBase.suppressAssistantText}: `"private"` when
-   * this message's plain text stayed unsent (working notes), `"visible"` when
-   * the fallback surfaced it because no `send_user_message` call reached the
-   * user. The daemon stamps it on the persisted row, and the read-side
-   * projection keys on that marker rather than on the live flag.
-   */
-  | {
-      type: "message_complete";
-      message: Message;
-      model?: string;
-      assistantTextVisibility?: AssistantTextVisibility;
-    }
+  | { type: "message_complete"; message: Message; model?: string }
   | { type: "max_tokens_reached"; stopReason: string }
   | {
       type: "tool_use";
@@ -701,20 +635,6 @@ interface AgentLoopRunOptionsBase {
   callSite?: LLMCallSite;
   /** Provider-resolution call site when it differs from turn semantics. */
   inferenceCallSite?: LLMCallSite;
-  /**
-   * Route this run's user-facing text through the `send_user_message` tool
-   * instead of streamed assistant text. The daemon sets it for main-agent runs
-   * when the `send-user-message` flag is on; every other caller leaves it
-   * unset and keeps today's streaming.
-   *
-   * When set, `text_delta` events are dropped and each `send_user_message`
-   * call's message is streamed in their place. The model-native history and
-   * the persisted assistant row still carry the raw text blocks, so the model
-   * sees its own scratchpad when the conversation resumes. The one exception
-   * is the fallback: a run that ends without ever calling the tool surfaces
-   * its final text, so a turn is never silently swallowed.
-   */
-  suppressAssistantText?: boolean;
   /**
    * Whether the connected client can render dynamic UI surfaces this turn,
    * surfaced to post-tool-use hooks via {@link PostToolUseContext}. Defaults to
@@ -1477,7 +1397,6 @@ export class AgentLoop {
       onCheckpoint,
       callSite,
       inferenceCallSite,
-      suppressAssistantText = false,
       supportsDynamicUi = true,
       trust,
       overrideProfile,
@@ -1507,14 +1426,6 @@ export class AgentLoop {
     let toolUseTurns = 0;
     let postModelCallContinues = 0;
     let consecutiveUnparseableToolTurns = 0;
-    // Whether the user has been told the OUTCOME of the work so far, not
-    // merely that work started. True only while the most recent tool-bearing
-    // response was `send_user_message` and nothing else: a response that sends
-    // a message alongside other tool calls is a progress update, and whatever
-    // those tools found has not reached the user yet. Only meaningful under
-    // {@link suppressAssistantText}, where it decides whether a terminal
-    // response's raw text still has to be surfaced as the fallback.
-    let userToldOutcome = false;
     // One deep history-repair recovery per turn: a second consecutive ordering
     // rejection means the repair could not recover, so the error surfaces
     // instead of looping. Turn-scoped, so each turn recovers afresh.
@@ -2156,13 +2067,6 @@ export class AgentLoop {
               if (deferAssistantOutput) {
                 return;
               }
-              // Under the tool-gated reply surface the model's plain text is a
-              // private scratchpad: it stays in history and in the persisted
-              // row, but nothing streams it. `send_user_message` carries what
-              // the user reads (see `emitUserFacingToolText`).
-              if (suppressAssistantText) {
-                return;
-              }
               // Apply sensitive-output placeholder substitution (chunk-safe)
               if (substitutionMap.size > 0) {
                 const combined = streamingPending + event.text;
@@ -2182,16 +2086,6 @@ export class AgentLoop {
                 onEvent({ type: "text_delta", text: event.text });
               }
             } else if (event.type === "thinking_delta") {
-              // Same reasoning as the plain text above, one level down: under
-              // the tool-gated reply surface the model's reasoning is private
-              // working notes. Streaming it would put a "Thinking" row above
-              // every delivered message, which is the opposite of what the
-              // gate is for. It stays in history and in the persisted row for
-              // resume and the inspector; the turn's `assistant_activity_state`
-              // transitions still tell the client work is happening.
-              if (suppressAssistantText) {
-                return;
-              }
               onEvent({ type: "thinking_delta", thinking: event.thinking });
             } else if (event.type === "tool_use_preview_start") {
               onEvent({
@@ -2459,14 +2353,6 @@ export class AgentLoop {
               content: structuredClone(message.content),
               messages: [...history],
               stopReason: response.stopReason,
-              assistantTextSuppressed: suppressAssistantText,
-              // Judged on the content the hook is about to see. A response
-              // with no tool calls contributes nothing, so the answer carried
-              // in from the last tool-bearing response stands.
-              userToldOutcome:
-                reportsOutcomeToUser(
-                  message.content.filter((block) => block.type === "tool_use"),
-                ) ?? userToldOutcome,
               decision: "stop",
             };
             const result = await traceAsyncSection(
@@ -2494,21 +2380,8 @@ export class AgentLoop {
         // Sensitive-output substitution is applied to match what the live stream
         // would have shown. A no-op when text already streamed live — that
         // stream stands. Call only for a turn being kept.
-        // Returns whether it surfaced the raw text, which is what tells the
-        // daemon a suppressed run's fallback fired for this message.
-        const emitFinalAssistantText = (
-          content: ContentBlock[],
-          opts: { turnEnding: boolean },
-        ): boolean => {
+        const emitFinalAssistantText = (content: ContentBlock[]): boolean => {
           if (streamedVisibleText) {
-            return false;
-          }
-          // Under the tool-gated reply surface the raw text is private working
-          // notes, so it is surfaced only as the fallback: the turn is ending
-          // and the user was never told the outcome. A message sent alongside
-          // other tool calls is a progress update, so it does not count.
-          // Anything else stays unsent, which is the point of the gate.
-          if (suppressAssistantText && (userToldOutcome || !opts.turnEnding)) {
             return false;
           }
           const finalText = applySubstitutions(
@@ -2520,54 +2393,6 @@ export class AgentLoop {
             return true;
           }
           return false;
-        };
-
-        /**
-         * How this message's plain text reached the user, for the marker the
-         * daemon stamps on the persisted row. Only a suppressed run answers:
-         * `"visible"` when the fallback just surfaced the raw text, `"private"`
-         * otherwise. Undefined on an ordinary run, whose rows carry no marker
-         * and render exactly as they do today.
-         */
-        const textVisibilityOf = (
-          fallbackSurfaced: boolean,
-        ): AssistantTextVisibility | undefined => {
-          if (!suppressAssistantText) {
-            return undefined;
-          }
-          return fallbackSurfaced ? "visible" : "private";
-        };
-
-        /**
-         * Stream the messages this call's `send_user_message` blocks carry.
-         * Emitted just before `message_complete` so the daemon's ordinary
-         * `text_delta` handling (sensitive-value swap, live mirror, partial
-         * flush) runs against the still-in-flight assistant row, and the
-         * streamed text matches what the persisted row projects: the blocks
-         * are joined exactly as the history renderer joins its text blocks.
-         */
-        const emitUserFacingToolText = (content: ContentBlock[]): void => {
-          if (!suppressAssistantText) {
-            return;
-          }
-          const messages: string[] = [];
-          for (const block of content) {
-            const message = deliveredUserMessage(block);
-            if (message !== null) {
-              messages.push(message);
-            }
-          }
-          if (messages.length === 0) {
-            return;
-          }
-          const text = applySubstitutions(
-            joinDeliveredMessages(messages),
-            substitutionMap,
-          );
-          if (text.length > 0) {
-            streamedVisibleText = true;
-            onEvent({ type: "text_delta", text });
-          }
         };
 
         // Build the assistant message with placeholder-only text.
@@ -2653,15 +2478,11 @@ export class AgentLoop {
           // truncation cut off, so its half-finished text is still working
           // notes, and surfacing it would deliver a fragment the model was
           // about to rewrite. Only a truncation the run does not continue is
-          // terminal, and only then is its raw text the tool-gated fallback.
+          // terminal, and only then is its raw text surfaced.
           const willContinueTruncatedTurn =
             maxTokensDecision === "continue" &&
             postModelCallContinues < MAX_POST_MODEL_CALL_CONTINUES;
-          const truncatedVisibility = textVisibilityOf(
-            emitFinalAssistantText(safeAssistantMessage.content, {
-              turnEnding: !willContinueTruncatedTurn,
-            }),
-          );
+          emitFinalAssistantText(safeAssistantMessage.content);
           if (willContinueTruncatedTurn) {
             postModelCallContinues++;
             rlog.warn(
@@ -2672,9 +2493,6 @@ export class AgentLoop {
               type: "message_complete",
               message: safeAssistantMessage,
               model: response.model,
-              ...(truncatedVisibility
-                ? { assistantTextVisibility: truncatedVisibility }
-                : {}),
             });
             history = maxTokensMessages;
             continue;
@@ -2688,9 +2506,6 @@ export class AgentLoop {
             type: "message_complete",
             message: safeAssistantMessage,
             model: response.model,
-            ...(truncatedVisibility
-              ? { assistantTextVisibility: truncatedVisibility }
-              : {}),
           });
           await stopTurn("max_tokens_reached");
           break;
@@ -2753,11 +2568,9 @@ export class AgentLoop {
             "Repeated unparseable tool calls reached the per-run limit",
           );
           unparseableToolRetryLimitReached = true;
-          const visiblePrefix = suppressAssistantText
-            ? []
-            : assistantMessage.content.filter(
-                (block) => block.type !== "tool_use",
-              );
+          const visiblePrefix = assistantMessage.content.filter(
+            (block) => block.type !== "tool_use",
+          );
           assistantMessage = {
             role: "assistant",
             content: [
@@ -2771,7 +2584,6 @@ export class AgentLoop {
             ],
           };
           toolUseBlocks = [];
-          userToldOutcome = false;
         }
 
         // At the no-tool stop boundary the retry decision is actionable: a
@@ -2791,13 +2603,9 @@ export class AgentLoop {
           // streamed nothing. Honoring a retry on an already-streamed visible
           // reply would leave the user looking at an answer the transcript
           // then silently replaces, with no retraction — so accept the turn
-          // instead of discarding visible output. Under the tool-gated reply
-          // surface a text-only turn streamed nothing either, so the nudge
-          // retry that asks for a `send_user_message` call stays available.
+          // instead of discarding visible output.
           const replyWasStreamedLive =
-            responseHasVisibleText &&
-            !deferAssistantOutput &&
-            !suppressAssistantText;
+            responseHasVisibleText && !deferAssistantOutput;
           if (replyWasStreamedLive) {
             rlog.warn(
               { turn: toolUseTurns },
@@ -2819,25 +2627,8 @@ export class AgentLoop {
           }
         }
 
-        // What this response's tool calls say about the user's knowledge: a
-        // response whose only tool calls are `send_user_message` reported the
-        // outcome of everything before it; a response that also calls other
-        // tools is announcing work whose result the user has not seen. A
-        // response with no tool calls at all is the terminal one and leaves
-        // the answer where the last tool-bearing response left it.
-        const reported = reportsOutcomeToUser(toolUseBlocks);
-        if (reported !== undefined) {
-          userToldOutcome = reported;
-        }
-
-        // The turn is being kept. Stream what `send_user_message` carries
-        // first: under the tool-gated surface that IS the reply, and emitting
-        // it here keeps it ahead of `message_complete` and of the tool events.
-        emitUserFacingToolText(assistantMessage.content);
-        // Surface the finalized text if the client saw nothing live (a
-        // deferred stream, a hook-rewritten empty turn, or the tool-gated
-        // fallback where no `send_user_message` call ever reached the user).
-        let fallbackSurfaced = false;
+        // The turn is being kept. Surface the finalized text if the client
+        // saw nothing live (a deferred stream or a hook-rewritten empty turn).
         if (unparseableToolRetryLimitReached && streamedVisibleText) {
           onEvent({
             type: "text_delta",
@@ -2846,7 +2637,6 @@ export class AgentLoop {
               options.locale,
             ),
           });
-          fallbackSurfaced = suppressAssistantText;
         } else {
           const displayContent = unparseableToolRetryLimitReached
             ? assistantMessage.content.map((block) =>
@@ -2866,11 +2656,8 @@ export class AgentLoop {
                   : block,
               )
             : assistantMessage.content;
-          fallbackSurfaced = emitFinalAssistantText(displayContent, {
-            turnEnding: toolUseBlocks.length === 0,
-          });
+          emitFinalAssistantText(displayContent);
         }
-        const textVisibility = textVisibilityOf(fallbackSurfaced);
 
         history.push(assistantMessage);
 
@@ -2878,9 +2665,6 @@ export class AgentLoop {
           type: "message_complete",
           message: assistantMessage,
           model: response.model,
-          ...(textVisibility
-            ? { assistantTextVisibility: textVisibility }
-            : {}),
         });
 
         if (toolUseBlocks.length === 0 || !this.toolExecutor) {
@@ -3317,7 +3101,6 @@ export class AgentLoop {
             content: [],
             messages: [...history],
             stopReason: null,
-            assistantTextSuppressed: suppressAssistantText,
             error: err,
             decision: "stop",
           };

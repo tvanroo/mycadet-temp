@@ -1,6 +1,6 @@
 /**
  * Applies the assistant's workspace theme (design-token overrides authored in
- * `ui/theme.json`) on top of the active light/dark/velvet base theme, and
+ * `ui/theme.json`) on top of the active light/dark base theme, and
  * keeps it live across multi-client edits.
  *
  * Mounted once from the root layout. Three responsibilities:

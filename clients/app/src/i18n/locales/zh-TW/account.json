@@ -93,18 +93,29 @@
     "cancel": "取消",
     "logIn": "登入"
   },
+  "selectAssistantScreen": {
+    "listAriaLabel": "助理",
+    "create": "建立助理",
+    "rowActionsAriaLabel": "{name} 的動作",
+    "retire": "停用助理"
+  },
   "appShell": {
     "loading": "正在載入助理…",
     "error": "無法載入助理。",
+    "errorTitle": "無法連線你的助手",
+    "errorBody": "它剛剛沒有回應。如果你的助手剛啟動，請稍候片刻再重試。",
     "notReady": "你的助理尚未就緒。",
     "notReadyTitle": "你的助理尚未就緒。",
     "notReadyBody": "它目前無法使用。請稍後重試，或從你的 Cadet 帳號啟動它。",
+    "wake": "喚醒",
+    "waking": "喚醒中…",
+    "wakeFailed": "喚醒目前沒有成功，請稍後再試。",
     "empty": "沒有可用的助理。",
     "unauthenticated": "請登入以繼續。",
     "retry": "重試",
+    "switchAssistant": "切換助理",
     "title": "助理",
     "selection": "選擇一個助理。",
-    "unavailable": "此助理無法使用。",
-    "chooseAnother": "選擇其他助理"
+    "unavailable": "此助理無法使用。"
   }
 }

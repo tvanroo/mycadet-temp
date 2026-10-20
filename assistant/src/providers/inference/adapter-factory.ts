@@ -219,7 +219,6 @@ const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
       ...(baseURL ? { baseURL } : {}),
     }),
 };
-
 /**
  * Module-load parity guard. Surfaces a clear startup error if someone adds
  * a catalog entry without a matching factory (or vice versa).

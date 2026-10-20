@@ -13,6 +13,7 @@
  */
 
 import { isCloudHome } from "../lib/cloud-values.js";
+import { cliCommand } from "../lib/cli-name.js";
 import { spawn } from "child_process";
 
 import { extractHostFromUrl, resolveAssistant } from "../lib/assistant-config";
@@ -48,7 +49,7 @@ const SSH_OPTS = [
 // ---------------------------------------------------------------------------
 
 function printHelp(): void {
-  console.log("Usage: cadet terminal [subcommand] [options]");
+  console.log(`Usage: ${cliCommand()} terminal [subcommand] [options]`);
   console.log("");
   console.log("Open an interactive terminal session into an assistant.");
   console.log("");
@@ -78,10 +79,10 @@ function printHelp(): void {
   );
   console.log("");
   console.log("Examples:");
-  console.log("  cadet terminal");
-  console.log("  cadet terminal attach my-session");
-  console.log("  cadet terminal list");
-  console.log("  cadet terminal --assistant my-assistant");
+  console.log(`  ${cliCommand()} terminal`);
+  console.log(`  ${cliCommand()} terminal attach my-session`);
+  console.log(`  ${cliCommand()} terminal list`);
+  console.log(`  ${cliCommand()} terminal --assistant my-assistant`);
 }
 
 function waitForExit(child: ChildProcess): Promise<void> {
@@ -247,7 +248,7 @@ export const terminal = Object.assign(
 
   if (subcommand === "attach") {
     if (!tmuxSessionName) {
-      console.error("Usage: cadet terminal attach <session-name>");
+      console.error(`Usage: ${cliCommand()} terminal attach <session-name>`);
       console.error(
         "\nUse 'cadet terminal list' to see available tmux sessions.",
       );

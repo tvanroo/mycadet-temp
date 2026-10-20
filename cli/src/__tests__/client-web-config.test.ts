@@ -11,8 +11,8 @@ import { describe, expect, test } from "bun:test";
 import { buildWebInterfaceConfig } from "../commands/client.js";
 
 const BASE = {
-  webUrl: "https://app.example.com",
   cloudUrl: "https://platform.example.com",
+  version: "0.13.0-local.202610191920.58bcf38",
 };
 
 describe("cadet client web __config", () => {

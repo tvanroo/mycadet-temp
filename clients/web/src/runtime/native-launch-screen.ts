@@ -11,12 +11,9 @@ interface NativeLaunchScreenPlugin {
 }
 
 const NATIVE_LAUNCH_SCREEN_PLUGIN = "NativeLaunchScreen";
-const NativeLaunchScreen =
-  registerPlugin<NativeLaunchScreenPlugin>(NATIVE_LAUNCH_SCREEN_PLUGIN);
-
-function nativeLaunchTheme(theme: ThemePreference): NativeLaunchTheme {
-  return theme === "velvet" ? "dark" : theme;
-}
+const NativeLaunchScreen = registerPlugin<NativeLaunchScreenPlugin>(
+  NATIVE_LAUNCH_SCREEN_PLUGIN,
+);
 
 function isAvailable(): boolean {
   return (
@@ -34,7 +31,7 @@ export async function markNativeLaunchScreenReady(
     return;
   }
   try {
-    await NativeLaunchScreen.ready({ theme: nativeLaunchTheme(theme) });
+    await NativeLaunchScreen.ready({ theme });
   } catch (error) {
     captureError(error, {
       context: "native_launch_screen_ready",
@@ -51,7 +48,7 @@ export async function syncNativeLaunchScreenTheme(
     return;
   }
   try {
-    await NativeLaunchScreen.setTheme({ theme: nativeLaunchTheme(theme) });
+    await NativeLaunchScreen.setTheme({ theme });
   } catch (error) {
     captureError(error, {
       context: "native_launch_screen_theme_sync",

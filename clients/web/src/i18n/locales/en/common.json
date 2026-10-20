@@ -832,13 +832,6 @@
     "tertiaryText": "Tertiary text - captions, labels, and placeholders.",
     "userBubble": "A message from the user, in its bubble."
   },
-  "themeToggle": {
-    "dark": "Dark",
-    "label": "Theme",
-    "light": "Light",
-    "system": "System",
-    "velvet": "Velvet"
-  },
   "ttsProviderForm": {
     "apiKey": "API Key",
     "apiKeyRequired": "Save an API key for this provider before testing.",
@@ -886,10 +879,6 @@
       "email": "My email address is set up but not working. Can you finish it off?",
       "phone": "My phone number is set up but not working. Can you finish it off?"
     }
-  },
-  "useBookmarks": {
-    "addFailed": "Failed to bookmark message.",
-    "removeFailed": "Failed to remove bookmark."
   },
   "useConnectClaude": {
     "exchangeFailed": "Check the pasted key and try again.",

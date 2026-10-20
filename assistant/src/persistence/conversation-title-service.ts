@@ -7,7 +7,6 @@
  * overwritten, never user-provided custom titles.
  */
 
-import { SEND_USER_MESSAGE_DELIVERED_ACK } from "../config/send-user-message-constants.js";
 import { MESSAGE_KEYS } from "../i18n/index.js";
 import {
   requestShortLabel,
@@ -26,7 +25,6 @@ import {
   updateConversationTitle,
 } from "./conversation-crud.js";
 import { isReplaceableTitle } from "./conversation-title-placeholders.js";
-import { projectPersistedAssistantContent } from "./user-facing-content.js";
 
 export { isReplaceableTitle } from "./conversation-title-placeholders.js";
 
@@ -585,12 +583,7 @@ function extractTextForTitle(raw: string | Array<{ type: string }>): string {
         // tool_result string content carries topical signal.
       } else if (block.type === "tool_result") {
         if (typeof block.content === "string") {
-          // The delivery tool answers a bare receipt, never anything topical.
-          // Titling from it names a gated conversation "Delivery Confirmation"
-          // instead of what the user actually asked about.
-          if (block.content.trim() !== SEND_USER_MESSAGE_DELIVERED_ACK) {
-            texts.push(block.content);
-          }
+          texts.push(block.content);
         } else if (Array.isArray(block.content)) {
           for (const nested of block.content) {
             if (
@@ -615,13 +608,7 @@ function buildRegenerationPrompt(recentMessages: MessageRow[]): string {
   const parts: string[] = ["Recent messages:"];
 
   for (const msg of recentMessages) {
-    // Read each row the way a user reads it. On a turn that routed its reply
-    // through `send_user_message`, the row's plain text is a private
-    // scratchpad and the reply is inside the tool call, so titling from the
-    // raw row names the conversation after the model's notes.
-    const text = extractTextForTitle(
-      projectPersistedAssistantContent(msg.content, msg.metadata),
-    );
+    const text = extractTextForTitle(msg.content);
     if (!text) {
       continue;
     }

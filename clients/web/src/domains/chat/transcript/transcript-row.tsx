@@ -23,7 +23,6 @@ import { ReactionLineRow } from "@/domains/chat/transcript/reaction-line-row";
 import { SystemCardRow } from "@/domains/chat/transcript/system-card-row";
 import { TranscriptMessageBody } from "@/domains/chat/transcript/transcript-message-body";
 import { isInteractiveTarget } from "@/utils/interactive-target";
-import { useHideThinkingUi } from "@/domains/chat/hooks/use-hide-thinking-ui";
 import { useCoarsePointerReveal } from "@/domains/chat/transcript/use-coarse-pointer-reveal";
 import { getMessageRenderKind } from "@/domains/chat/transcript/message-render-kind";
 import { isPointerCoarse } from "@/utils/pointer";
@@ -54,7 +53,6 @@ export interface TranscriptRowProps {
     data?: Record<string, unknown>,
   ) => void;
   onForkConversation?: (messageId: string) => void;
-  onSummarizeUpToHere?: (messageId: string) => void;
   onRetryLatestTurn?: () => void;
   onInspectMessage?: (messageId: string) => void;
   /** Render-prop for `kind: "onboardingChoice"` items. Onboarding depends on
@@ -202,7 +200,6 @@ export const TranscriptRow = memo(function TranscriptRow({
   assistantDisplayName,
   onSurfaceAction,
   onForkConversation,
-  onSummarizeUpToHere,
   onRetryLatestTurn,
   onInspectMessage,
   renderOnboardingChoice,
@@ -223,7 +220,6 @@ export const TranscriptRow = memo(function TranscriptRow({
   isLatestMessage,
 }: TranscriptRowProps) {
   const { t } = useTranslation("chat");
-  const hideThinkingUi = useHideThinkingUi();
   switch (item.kind) {
     case "message": {
       const renderKind = getMessageRenderKind(item.message);
@@ -285,7 +281,6 @@ export const TranscriptRow = memo(function TranscriptRow({
           assistantDisplayName={assistantDisplayName}
           onSurfaceAction={onSurfaceAction}
           onForkConversation={onForkConversation}
-          onSummarizeUpToHere={onSummarizeUpToHere}
           onRetryLatestTurn={onRetryLatestTurn}
           onInspectMessage={onInspectMessage}
           onOpenRuleEditor={onOpenRuleEditor}
@@ -351,9 +346,7 @@ export const TranscriptRow = memo(function TranscriptRow({
             the step stack cannot narrate.
           */}
           <StreamingShimmerText>
-            {hideThinkingUi
-              ? t("transcriptRow.working")
-              : (item.label ?? t("transcriptRow.thinking"))}
+            {item.label ?? t("transcriptRow.thinking")}
           </StreamingShimmerText>
         </div>
       );

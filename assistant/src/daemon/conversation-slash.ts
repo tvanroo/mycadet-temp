@@ -10,8 +10,8 @@ import {
 } from "../config/loader.js";
 import { orderProfileKeys } from "../config/profile-order.js";
 import { getConversationOverrideProfile } from "../persistence/conversation-crud.js";
+import { PROVIDER_CATALOG } from "../providers/model-catalog.js";
 import { getConfiguredProviders } from "../providers/provider-availability.js";
-import { getVisibleProviderCatalog } from "../providers/provider-catalog-visibility.js";
 
 export type SlashResolution =
   | { kind: "passthrough"; content: string }
@@ -235,7 +235,7 @@ async function resolveModelList(): Promise<SlashResolution> {
     id: provider,
     displayName: providerName,
     models,
-  } of getVisibleProviderCatalog(config)) {
+  } of PROVIDER_CATALOG) {
     const hasKey = configuredProviders.has(provider);
     const status = hasKey ? "✓" : "✗";
     lines.push(`**${providerName}** ${status}`);

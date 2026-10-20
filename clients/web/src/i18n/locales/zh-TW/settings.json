@@ -317,15 +317,6 @@
     "title": "安全性",
     "useForSignIn": "使用 {label} 登入"
   },
-  "bookmarksPage": {
-    "emptyDescription": "將滑鼠游標懸停在任何訊息上，然後點擊書籤圖示即可將其儲存到此處。",
-    "emptyTitle": "無書籤",
-    "errorDescription": "發生錯誤。請再試一次。",
-    "errorTitle": "載入書籤失敗",
-    "open": "開啟",
-    "removeBookmark": "移除書籤",
-    "retry": "重試"
-  },
   "bulkOverrideSwapModal": {
     "affectedSummary": "{count, plural, other {# 個動作目前使用 {profile}}}",
     "applyTo": "{count, plural, other {套用至 # 個動作}}",
@@ -693,8 +684,6 @@
     "current": "目前",
     "customize": "自訂",
     "dangerZoneTitle": "危險區域",
-    "handleSubtitle": "為此頁面提供服務的助理。",
-    "handleTitle": "助理識別碼",
     "preferencesSubtitle": "自訂 Cadet 在此裝置上的外觀和行為。",
     "preferencesTitle": "偏好設定",
     "retireAssistantDescription": "永久停用此助理並刪除所有相關資料。",
@@ -1631,8 +1620,7 @@
     "dark": "深色",
     "light": "淺色",
     "system": "系統",
-    "title": "佈景主題",
-    "velvet": "絲絨"
+    "title": "佈景主題"
   },
   "tierPicker": {
     "machineAriaLabel": "機器層級",
@@ -2004,38 +1992,6 @@
     "redirectUrl": "重新導向網址",
     "waitingAuthorization": "等待授權中..."
   },
-  "personalityPage": {
-    "axes": {
-      "companionCoworker": {
-        "left": "夥伴",
-        "right": "同事"
-      },
-      "executeCollaborate": {
-        "left": "獨立",
-        "right": "協作"
-      },
-      "genzBoomer": {
-        "left": "Z 世代",
-        "right": "嬰兒潮世代"
-      },
-      "playfulSerious": {
-        "left": "活潑",
-        "right": "嚴肅"
-      },
-      "politeUnfiltered": {
-        "left": "有禮",
-        "right": "直率"
-      }
-    },
-    "loadError": "無法載入個性滑桿。",
-    "rangeAriaLabel": "{left} 到 {right}",
-    "save": "儲存",
-    "saveErrorToast": "無法儲存個性滑桿。請再試一次。",
-    "saveSuccessToast": "個性滑桿已儲存。",
-    "saving": "正在儲存…",
-    "subtitle": "將這些滑桿值儲存到此助手。這不會改寫身分檔案。",
-    "title": "個性"
-  },
   "sidebar": {
     "general": "一般",
     "model": "模型與服務",
@@ -2045,12 +2001,10 @@
     "voice": "語音",
     "sounds": "聲音",
     "privacy": "權限與隱私",
-    "bookmarks": "書籤",
     "usage": "用量",
     "billingUsage": "帳單與用量",
     "community": "社群",
     "debug": "偵錯",
-    "personality": "個性",
     "logout": "登出",
     "login": "登入",
     "title": "設定"

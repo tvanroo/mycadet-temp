@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, renameSync, rmSync, unlinkSync } from "fs";
+import { cliCommand } from "../lib/cli-name.js";
 import { basename, dirname, join, sep } from "path";
 import { fileURLToPath } from "url";
 
@@ -223,7 +224,7 @@ export const uninstall = Object.assign(
   async function uninstall(): Promise<void> {
     const args = process.argv.slice(3);
     if (args.includes("--help") || args.includes("-h")) {
-      console.log("Usage: cadet uninstall [--yes]");
+      console.log(`Usage: ${cliCommand()} uninstall [--yes]`);
       console.log("");
       console.log(
         "Remove Cadet entirely: retire any remaining assistants, delete every location it uses for this environment (assistant state, retired archives, config, logs), and remove the Cadet installation itself.",

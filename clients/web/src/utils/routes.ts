@@ -99,16 +99,6 @@ export const routes = {
    */
   credentialEntry: r("/assistant/credentials/enter"),
   quickInput: r("/assistant/quick-input"),
-  /**
-   * All chats: the whole conversation history as one page, banded by date and
-   * narrowed with a chip row. Behind the `sidebar-done` flag; the route sends
-   * the user to chat when the flag is off.
-   *
-   * A link that preselects a chip appends the search string
-   * `allChatsSearchFor` builds (`domains/chat/utils/all-chats-filters.ts`),
-   * so the producer and the page read one spelling of the params.
-   */
-  allChats: r("/assistant/chats"),
   conversations: r("/assistant/conversations"),
   /** Conversation URL, optionally naming the app the viewer keeps on screen.
    *  `appId` is passed through unencoded, like {@link routes.library.app};
@@ -303,7 +293,6 @@ export const routes = {
     voice: r("/assistant/settings/voice"),
     sounds: r("/assistant/settings/sounds"),
     privacy: r("/assistant/settings/privacy"),
-    bookmarks: r("/assistant/settings/bookmarks"),
     usage: SETTINGS_USAGE_PATH,
     // Deep-link straight to the Billing sub-tab (only shown when signed in to
     // Cadet Cloud).
@@ -335,7 +324,6 @@ export const routes = {
       return `${SETTINGS_USAGE_PATH}?${params.toString()}`;
     },
     community: r("/assistant/settings/community"),
-    personality: r("/assistant/settings/personality"),
     mcp: r("/assistant/settings/mcp"),
     debug: r("/assistant/settings/debug"),
     dangerZone: r("/assistant/settings/danger-zone"),

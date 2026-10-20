@@ -151,7 +151,6 @@ import {
   mergeMessageMetadata,
   readModeSessionMetadata,
 } from "../../persistence/message-metadata.js";
-import { assistantTextVisibilityOf } from "../../persistence/user-facing-content.js";
 import { MEMORY_RETROSPECTIVE_FORK_SOURCE } from "../../plugins/defaults/memory/memory-retrospective-constants.js";
 import { normalizeOnboardingContext } from "../../prompts/normalize-onboarding.js";
 import { writeOnboardingSection } from "../../prompts/persona-resolver.js";
@@ -872,9 +871,7 @@ function displayRowFilter(conversationId: string): (m: MessageRow) => boolean {
  *
  * A merged run takes the FIRST row's id, so any route that compares an id a
  * client received against stored rows has to compare against these, not
- * against the raw tail. A gated `send_user_message` turn is always at least
- * two rows (the call, then the post-tool wrap-up), so on that path the raw
- * tail is never the id the client holds.
+ * against the raw tail.
  */
 function consolidateDisplayTurns(rows: MessageRow[]): {
   messages: MessageRow[];
@@ -1214,12 +1211,7 @@ export async function handleListMessages({
       slackMessage,
       deletedAt,
       clientMessageId: msg.clientMessageId ?? undefined,
-      assistantTextVisibility: assistantTextVisibilityOf(msg.metadata),
       modeSession: readModeSessionMetadata(msg.metadata),
-      // The row's raw stored envelope, carried to the render pass below so it
-      // can read the row's own `assistantTextVisibility` marker. Never part of
-      // the wire payload, which the serializer builds field by field.
-      rowMetadata: msg.metadata,
     };
   });
 
@@ -1327,7 +1319,6 @@ export async function handleListMessages({
         m.content,
         attachmentBlocks,
         m.id ?? undefined,
-        m.rowMetadata,
         m.role === "assistant" ? locale : undefined,
       );
 
@@ -1449,11 +1440,6 @@ export async function handleListMessages({
         ...(m.systemCard ? { systemCard: true } : {}),
         ...(m.noResponse ? { noResponse: true } : {}),
         ...(m.cameraFrame ? { cameraFrame: true as const } : {}),
-        // The row's own marker, so a client gates per-row presentation on what
-        // this row was written with rather than on the live flag.
-        ...(m.assistantTextVisibility
-          ? { assistantTextVisibility: m.assistantTextVisibility }
-          : {}),
         ...(m.reaction ? { reaction: m.reaction } : {}),
         ...(m.providerError ? { providerError: m.providerError } : {}),
         ...(m.slackMessage ? { slackMessage: m.slackMessage } : {}),
@@ -3512,8 +3498,7 @@ export async function handleGetSuggestion(
   // Consolidated the way `/messages` consolidates, because the `messageId` a
   // client asks about came from there. A merged run of assistant rows takes
   // the first row's id, so comparing against raw rows would call every
-  // multi-row turn stale: on a gated `send_user_message` turn, which is always
-  // at least the call row plus the post-tool wrap-up, that is every reply.
+  // multi-row turn stale.
   const rawMessages = consolidateDisplayTurns(
     getMessages(resolvedConversationId).filter(
       displayRowFilter(resolvedConversationId),
@@ -3550,12 +3535,7 @@ export async function handleGetSuggestion(
     }
 
     const content: unknown = msg.content;
-    const rendered = renderHistoryContent(
-      content,
-      undefined,
-      undefined,
-      msg.metadata,
-    );
+    const rendered = renderHistoryContent(content);
     const text = rendered.text.trim();
     if (!text) {
       continue;

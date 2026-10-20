@@ -846,8 +846,7 @@
     "dark": "Oscuro",
     "label": "Tema",
     "light": "Claro",
-    "system": "Sistema",
-    "velvet": "Velvet"
+    "system": "Sistema"
   },
   "ttsProviderForm": {
     "apiKey": "Clave de API",

@@ -95,7 +95,6 @@ describe("describeQuietStep", () => {
     // GIVEN calls that work nowhere a user would name
     // WHEN each step is described
     // THEN none produces a line
-    expect(describeQuietStep(call("send_user_message"))).toBeNull();
     expect(describeQuietStep(call("ui_show"))).toBeNull();
     expect(describeQuietStep(call("skill_load"))).toBeNull();
   });

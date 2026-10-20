@@ -1,6 +1,4 @@
-import { isAssistantFeatureFlagEnabled } from "../config/assistant-feature-flags.js";
 import { resolveCallSiteConfig } from "../config/llm-resolver.js";
-import type { AssistantConfig } from "../config/schema.js";
 import { type LLMConfig } from "../config/schemas/llm.js";
 import { getProviderKeyAsync } from "../security/secure-keys.js";
 import { ProviderNotConfiguredError } from "../util/errors.js";
@@ -113,16 +111,6 @@ export interface ProvidersConfig {
   timeouts?: { providerStreamTimeoutSec?: number };
 }
 
-function isProviderFeatureFlagEnabled(
-  key: string,
-  config: ProvidersConfig,
-): boolean {
-  return isAssistantFeatureFlagEnabled(
-    key,
-    config as unknown as AssistantConfig,
-  );
-}
-
 function resolveModel(config: ProvidersConfig, providerName: string): string {
   const resolved = resolveCallSiteConfig("mainAgent", config.llm);
   const inferenceProvider = resolved.provider;
@@ -206,13 +194,6 @@ export async function initializeProviders(
   ).provider;
 
   for (const entry of PROVIDER_CATALOG) {
-    if (
-      entry.featureFlag &&
-      !isProviderFeatureFlagEnabled(entry.featureFlag, config)
-    ) {
-      continue;
-    }
-
     const isKeyless = entry.setupMode === "keyless";
 
     // Credential resolution: user key first, cloud proxy second. Keyless

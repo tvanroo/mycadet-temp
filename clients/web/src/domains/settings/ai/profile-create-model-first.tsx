@@ -34,7 +34,6 @@ import { ProviderCreateForm } from "@/domains/settings/ai/provider-create-form";
 import type { ProfileEditor } from "@/domains/settings/ai/use-profile-editor";
 import { useActiveAssistantIsSelfHosted } from "@/hooks/use-cloud-gate";
 import { useTranslation, type TFunction } from "@/i18n";
-import { useAssistantFeatureFlagStore } from "@/stores/assistant-feature-flag-store";
 
 /**
  * Sentinel for the Model list's sticky escape hatch. Namespaced so it can
@@ -129,21 +128,17 @@ export function ProfileCreateModelFirst({
 }: ProfileCreateModelFirstProps) {
   const { t } = useTranslation("settings");
   const activeAssistantIsSelfHosted = useActiveAssistantIsSelfHosted();
-  const hostedInference =
-    useAssistantFeatureFlagStore.use.cadetHostedInference();
   const defaultEntryMetaLabel = t("aiProviderPicker.defaultEntryMeta");
 
   const resolverInput = useMemo<ModelFirstInput>(
     () => ({
       connections: editor.effectiveConnections,
-      hostedInference,
       activeAssistantIsSelfHosted,
       labelFor: (provider) => PROVIDER_DISPLAY_NAMES[provider] ?? provider,
       defaultEntryMetaLabel,
     }),
     [
       editor.effectiveConnections,
-      hostedInference,
       activeAssistantIsSelfHosted,
       defaultEntryMetaLabel,
     ],

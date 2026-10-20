@@ -4,7 +4,6 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { useActiveAssistantId } from "@/assistant/use-active-assistant-id";
-import { useCanUseInternalThreadActions } from "@/lib/auth/internal-thread-actions";
 import {
   isLlmRequestLogsDisabledError,
   useConversationCallNumbering,
@@ -28,7 +27,6 @@ import {
   useSupportsLlmContextSummaryView,
 } from "@/lib/backwards-compat/llm-context-summary-view";
 import { isElectron } from "@/runtime/is-electron";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import { useIsSessionInitializing } from "@/stores/auth-store";
 import { routes } from "@/utils/routes";
 import { t, useTranslation } from "@/i18n";
@@ -82,12 +80,6 @@ import { SkillsTab } from "./components/tabs/skills-tab";
  */
 export function InspectPage(): ReactNode {
   const { t: tChat } = useTranslation("chat");
-  const canInspect = useCanUseInternalThreadActions();
-  // The internal-thread-actions flag reads as registry-default `false` until
-  // the `/feature-flags` response lands, so an enabled session would flash
-  // the denial on deep links. Treat the pre-hydration window as loading
-  // instead.
-  const flagsHydrated = useClientFeatureFlagStore.use.hydrated();
   const authLoading = useIsSessionInitializing();
   // React Router's :conversationId segment is the source of truth; the
   // route definition guarantees it's present, but useParams still types
@@ -96,18 +88,10 @@ export function InspectPage(): ReactNode {
   const [searchParams] = useSearchParams();
   const messageId = searchParams.get("messageId");
 
-  if (authLoading || (!canInspect && !flagsHydrated)) {
+  if (authLoading) {
     return (
       <CenteredMessage tone="muted">
         {tChat("inspectPage.loading")}
-      </CenteredMessage>
-    );
-  }
-
-  if (!canInspect) {
-    return (
-      <CenteredMessage tone="muted">
-        {tChat("inspectPage.accessDenied")}
       </CenteredMessage>
     );
   }

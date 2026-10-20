@@ -612,23 +612,6 @@ describe("auth store onboarding flag reconciliation", () => {
     }
   });
 
-  test("initSession on a served gateway's pair page settles the cloud probe as absent", async () => {
-    mockIsGatewayAuth = true;
-    mockIsServedGatewayRuntime = true;
-    window.history.pushState({}, "", "/assistant/pair");
-    try {
-      await useAuthStore.getState().initSession();
-
-      expect(refreshRemoteGatewaySessionMock).not.toHaveBeenCalled();
-      expect(useAuthStore.getState().sessionStatus).toBe("unauthenticated");
-      // Nothing on a served gateway ever probes the cloud, so leaving the
-      // probe "unknown" would only arm the route guard's revalidation.
-      expect(useAuthStore.getState().cloudSession).toBe("absent");
-    } finally {
-      window.history.pushState({}, "", "/");
-    }
-  });
-
   test("initSession on a served-gateway runtime skips the local prime and settles fast", async () => {
     mockIsGatewayAuth = true;
     mockIsServedGatewayRuntime = true;

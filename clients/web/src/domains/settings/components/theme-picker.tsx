@@ -1,20 +1,17 @@
-import { Heart, Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
 import { useThemePreference } from "@/hooks/use-theme-preference";
 import { useTranslation } from "@/i18n";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import { type ThemePreference } from "@/utils/theme-preferences";
 import { SegmentControl } from "@mycadet/design-library/components/segment-control";
 
 /**
- * Theme picker (System / Light / Dark, plus Velvet when the flag is on), shown
- * inline in the Preferences card on Settings → General. Not Electron-gated —
- * theme applies on every platform. Shares `useThemePreference` with the
- * sidebar `ThemeToggle`, so the two surfaces stay in sync.
+ * Theme picker (System / Light / Dark), shown inline in the Preferences card
+ * on Settings → General. Not Electron-gated — theme applies on every platform.
+ * This card owns the theme UI; the chat menu's Theme section was removed.
  */
 export function ThemePicker() {
   const { t } = useTranslation("settings");
-  const velvet = useClientFeatureFlagStore.use.velvet();
   const { theme, setThemePreference } = useThemePreference();
 
   const themeItems = [
@@ -33,15 +30,6 @@ export function ThemePicker() {
       label: t("themePicker.dark"),
       icon: <Moon className="h-4 w-4" />,
     },
-    ...(velvet
-      ? [
-          {
-            value: "velvet" as const,
-            label: t("themePicker.velvet"),
-            icon: <Heart className="h-4 w-4" />,
-          },
-        ]
-      : []),
   ];
 
   return (

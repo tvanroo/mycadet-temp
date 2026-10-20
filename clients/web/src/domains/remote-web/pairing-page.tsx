@@ -25,7 +25,6 @@ import {
 import { isNativePlatform } from "@/runtime/native-auth";
 import { isAndroidBrowser, isIOSBrowser } from "@/runtime/platform-detection";
 import { nativeSwitchToOriginPath } from "@/runtime/self-hosted-servers";
-import { useAuthStore } from "@/stores/auth-store";
 import { sanitizeReturnTo } from "@/utils/return-to";
 import { routes } from "@/utils/routes";
 
@@ -35,23 +34,6 @@ type PairingDetails = {
   deviceCode: string;
   userCode: string | null;
 };
-
-/**
- * The device code this page load has already exchanged. The exchange burns
- * the single-use code, and settling the session afterwards can remount this
- * page (the route guard revalidates on the session change), so a remount
- * that still carries the code must resume from the held token rather than
- * resubmit the code and read the gateway's 401 as an expired pairing.
- */
-let burnedDeviceCode: string | null = null;
-
-function isBurnedDeviceCode(deviceCode: string | null): boolean {
-  return deviceCode !== null && deviceCode === burnedDeviceCode;
-}
-
-export function __resetBurnedDeviceCodeForTesting(): void {
-  burnedDeviceCode = null;
-}
 
 type PairingState =
   | { kind: "awaiting_code" }
@@ -202,7 +184,7 @@ function buildAppHandoffUrl(
 /**
  * The hub's chooser on its own origin, or `null` when the served config names
  * no hub. Abandoning a pairing has to leave this origin: the chooser sits
- * behind `requireRemoteGatewayPairing`, which bounces an unauthenticated visit
+ * behind `requireRemoteGatewayPairing`, which bounces a sessionless visit
  * straight back here and mints a fresh code. `noAutoSkip` keeps the hub on the
  * chooser instead of skipping through a lone assistant.
  */
@@ -272,11 +254,7 @@ export function RemoteWebPairingPage() {
   // If the Cadet app is installed we offer to hand the pairing to it before
   // burning the single-use code, never inside a native shell that pairs directly.
   const appHandoffPlatform = useMemo<AppHandoffPlatform | null>(() => {
-    if (
-      !params.deviceCode ||
-      isBurnedDeviceCode(params.deviceCode) ||
-      isNativePlatform()
-    ) {
+    if (!params.deviceCode || isNativePlatform()) {
       return null;
     }
     if (isAndroidBrowser()) {
@@ -336,26 +314,7 @@ export function RemoteWebPairingPage() {
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
-    const finishApproved = async () => {
-      // The route guard reads the auth store, not the token slot: the boot
-      // probe settled this public page unauthenticated, so the store has to
-      // observe the activated token before `returnTo` is admitted.
-      await useAuthStore.getState().refreshSession();
-      if (controller.signal.aborted) {
-        return;
-      }
-      // Drop the burned device code from the URL before navigating so it
-      // never lingers in the address bar or re-submits on reload.
-      clearDeviceCodeFromUrl();
-      setState({ kind: "approved" });
-      timeout = setTimeout(() => navigate(returnTo, { replace: true }), 250);
-    };
-
     const poll = async () => {
-      if (isBurnedDeviceCode(pairing.deviceCode)) {
-        await finishApproved();
-        return;
-      }
       try {
         const result = await exchangeRemoteWebPairingToken(
           pairing.deviceCode,
@@ -370,9 +329,12 @@ export function RemoteWebPairingPage() {
           return;
         }
 
-        burnedDeviceCode = pairing.deviceCode;
         activateRemoteGatewaySession(result);
-        await finishApproved();
+        // Drop the burned device code from the URL before navigating so it
+        // never lingers in the address bar or re-submits on reload.
+        clearDeviceCodeFromUrl();
+        setState({ kind: "approved" });
+        timeout = setTimeout(() => navigate(returnTo, { replace: true }), 250);
       } catch (err) {
         if (controller.signal.aborted) {
           return;
@@ -512,6 +474,21 @@ export function RemoteWebPairingPage() {
             onClick={handleCancel}
           >
             {t("pairingPage.cancel")}
+          </Button>
+        ) : null}
+
+        {state.kind === "expired" ? (
+          <Button
+            variant="outlined"
+            fullWidth
+            className="mt-6"
+            onClick={() => {
+              setPairing(null);
+              setCodeDraft("");
+              setState({ kind: "awaiting_code" });
+            }}
+          >
+            {t("pairingPage.enterNewCode")}
           </Button>
         ) : null}
       </section>

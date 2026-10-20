@@ -14,14 +14,9 @@ afterEach(() => {
 });
 
 describe("feature flag catalog", () => {
-  test("exposes cadet hosted inference as an assistant flag defaulting off", () => {
-    expect(ASSISTANT_FLAG_DEFAULTS.cadetHostedInference).toBe(false);
-    expect("cadetHostedInference" in CLIENT_FLAG_DEFAULTS).toBe(false);
-  });
-
-  test("exposes the send-user-message tool gate to both flag stores", () => {
-    expect(CLIENT_FLAG_DEFAULTS.sendUserMessage).toBe(false);
-    expect(ASSISTANT_FLAG_DEFAULTS.sendUserMessage).toBe(false);
+  test("exposes os-beta as an assistant flag defaulting off", () => {
+    expect(ASSISTANT_FLAG_DEFAULTS.osBeta).toBe(false);
+    expect("osBeta" in CLIENT_FLAG_DEFAULTS).toBe(false);
   });
 
 
@@ -52,115 +47,28 @@ describe("getEnvFlagOverridesForScope", () => {
   test("filters client-scoped flags and separates bool/str", () => {
     (globalThis as Record<string, unknown>).window = {
       __CADET_FLAG_OVERRIDES__: {
-        // client-only flag (boolean)
-        velvet: true,
-        // assistant-only flag (boolean) — should be excluded from client scope
-        "cadet-hosted-inference": true,
-        // client-visible flag (string)
-        "vision-mode": "on",
+        // assistant-only flag (boolean) — excluded from the client scope
+        "os-beta": true,
       },
     };
 
     const result = getEnvFlagOverridesForScope("client");
-    expect(result.bool).toEqual({ velvet: true });
-    expect(result.str).toEqual({ visionMode: "on" });
-    expect(result.bool).not.toHaveProperty("cadetHostedInference");
-  });
-
-  test("keeps booleanish Vite env values as strings for string-valued flags", () => {
-    (globalThis as Record<string, unknown>).window = undefined;
-    process.env.VITE_CADET_FLAG_VISION_MODE = "on";
-    try {
-      const result = getEnvFlagOverridesForScope("client");
-      expect(result.str.visionMode).toBe("on");
-      expect(result.bool).not.toHaveProperty("visionMode");
-
-      process.env.VITE_CADET_FLAG_VISION_MODE = "off";
-      expect(getEnvFlagOverridesForScope("client").str.visionMode).toBe("off");
-    } finally {
-      delete process.env.VITE_CADET_FLAG_VISION_MODE;
-    }
-  });
-
-  test("matches string-flag env arms case-insensitively and stores the canonical arm", () => {
-    (globalThis as Record<string, unknown>).window = undefined;
-    process.env.VITE_CADET_FLAG_VISION_MODE = "ON";
-    try {
-      expect(getEnvFlagOverridesForScope("client").str.visionMode).toBe("on");
-
-      process.env.VITE_CADET_FLAG_VISION_MODE = "On";
-      expect(getEnvFlagOverridesForScope("client").str.visionMode).toBe("on");
-    } finally {
-      delete process.env.VITE_CADET_FLAG_VISION_MODE;
-    }
-  });
-
-  test("drops string-flag env values that match no declared arm", () => {
-    (globalThis as Record<string, unknown>).window = undefined;
-    process.env.VITE_CADET_FLAG_VISION_MODE = "bogus";
-    try {
-      const result = getEnvFlagOverridesForScope("client");
-      expect(result.str).not.toHaveProperty("visionMode");
-      expect(result.bool).not.toHaveProperty("visionMode");
-    } finally {
-      delete process.env.VITE_CADET_FLAG_VISION_MODE;
-    }
+    expect(result.bool).toEqual({});
+    expect(result.str).toEqual({});
   });
 
   test("boolean flags keep case-insensitive env coercion", () => {
     (globalThis as Record<string, unknown>).window = undefined;
     for (const raw of ["on", "ON"]) {
-      process.env.VITE_CADET_FLAG_VELVET = raw;
+      process.env.VITE_CADET_FLAG_OS_BETA = raw;
       try {
-        const result = getEnvFlagOverridesForScope("client");
-        expect(result.bool.velvet).toBe(true);
-        expect(result.str).not.toHaveProperty("velvet");
+        const result = getEnvFlagOverridesForScope("assistant");
+        expect(result.bool.osBeta).toBe(true);
+        expect(result.str).not.toHaveProperty("osBeta");
       } finally {
-        delete process.env.VITE_CADET_FLAG_VELVET;
+        delete process.env.VITE_CADET_FLAG_OS_BETA;
       }
     }
-  });
-
-  test("maps boolean-coerced window overrides back onto on/off string flags", () => {
-    (globalThis as Record<string, unknown>).window = {
-      __CADET_FLAG_OVERRIDES__: { "vision-mode": true },
-    };
-    expect(getEnvFlagOverridesForScope("client").str.visionMode).toBe("on");
-
-    (globalThis as Record<string, unknown>).window = {
-      __CADET_FLAG_OVERRIDES__: { "vision-mode": false },
-    };
-    expect(getEnvFlagOverridesForScope("client").str.visionMode).toBe("off");
-  });
-
-  test("drops boolean-coerced window overrides for string flags without on/off arms", () => {
-    (globalThis as Record<string, unknown>).window = {
-      __CADET_FLAG_OVERRIDES__: {
-        "pre-chat-onboarding-experiment-2026-06-06": true,
-      },
-    };
-
-    const result = getEnvFlagOverridesForScope("client");
-    expect(result.str).not.toHaveProperty(
-      "preChatOnboardingExperiment20260606",
-    );
-    expect(result.bool).not.toHaveProperty(
-      "preChatOnboardingExperiment20260606",
-    );
-  });
-
-  test("flags with scope 'both' appear for both client and assistant scopes", () => {
-    (globalThis as Record<string, unknown>).window = {
-      __CADET_FLAG_OVERRIDES__: {
-        "send-user-message": true,
-      },
-    };
-
-    const clientResult = getEnvFlagOverridesForScope("client");
-    const assistantResult = getEnvFlagOverridesForScope("assistant");
-
-    expect(clientResult.bool).toEqual({ sendUserMessage: true });
-    expect(assistantResult.bool).toEqual({ sendUserMessage: true });
   });
 });
 

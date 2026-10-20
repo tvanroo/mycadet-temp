@@ -26,9 +26,7 @@ import {
   PROVIDER_DISPLAY_NAMES,
   PROVIDER_SUPPORTS_PLATFORM_AUTH,
   getModelsForProvider,
-  catalogEnabledFlags,
   catalogModelSupportsText,
-  getVisibleModelsForProvider,
   getTextGenerationModelsForProvider,
   getCloudUpstreamForModel,
   providerOffersTextGeneration,
@@ -134,14 +132,18 @@ describe("parity with meta/llm-provider-catalog.json", () => {
   const pickerProviderIds = webProviderIds;
 
   test("cadet picker is the union of served catalogs, including GPU models", () => {
-    // MODELS_BY_PROVIDER.cadet lists only Cadet-hosted GPU models. The
-    // picker still exposes the union of every served catalog through
+    // MODELS_BY_PROVIDER.cadet lists the Cadet-hosted GPU models; the picker
+    // still exposes the union of every served catalog through
     // getModelsForProvider("cadet").
     expect(MODELS_BY_PROVIDER.cadet.map((model) => model.id)).toEqual([
-      "qwen/qwen3-8b",
+      "accounts/fireworks/models/glm-5p3-flash",
     ]);
     expect(metaProvidersById.get("cadet")?.id).toBe("cadet");
-
+    // GLM 5.3 Flash is dual-hosted (Fireworks upstream + Cadet entry), so the
+    // cloud upstream resolves to the first served catalog carrying the id.
+    expect(
+      getCloudUpstreamForModel("accounts/fireworks/models/glm-5p3-flash"),
+    ).toBe("fireworks");
     const cadetModels = getModelsForProvider("cadet");
     const servedIds = new Set<string>(
       CADET_SERVED_PROVIDERS.flatMap((p) =>
@@ -163,29 +165,10 @@ describe("parity with meta/llm-provider-catalog.json", () => {
 
   test("getCloudUpstreamForModel derives the serving provider", () => {
     expect(getCloudUpstreamForModel("claude-opus-4-8")).toBe("anthropic");
-    expect(
-      getCloudUpstreamForModel("accounts/fireworks/models/glm-5p3"),
-    ).toBe("fireworks");
-    expect(getCloudUpstreamForModel("qwen/qwen3-8b")).toBe("cadet");
+    expect(getCloudUpstreamForModel("accounts/fireworks/models/glm-5p3")).toBe(
+      "fireworks",
+    );
     expect(getCloudUpstreamForModel("not-a-real-model")).toBeUndefined();
-  });
-
-  test("cadet GPU models stay out of pickers and hide without hosted inference", () => {
-    expect(Object.keys(MODELS_BY_PROVIDER)).toContain("cadet");
-    expect(INFERENCE_PROVIDERS).not.toContain("cadet");
-    expect(CONNECTION_PROVIDERS).not.toContain("cadet");
-    expect(
-      getVisibleModelsForProvider(
-        "cadet",
-        catalogEnabledFlags({ hostedInference: false }),
-      ).some((model) => model.id === "qwen/qwen3-8b"),
-    ).toBe(false);
-    expect(
-      getVisibleModelsForProvider(
-        "cadet",
-        catalogEnabledFlags({ hostedInference: true }),
-      ).some((model) => model.id === "qwen/qwen3-8b"),
-    ).toBe(true);
   });
 
   test("structured-decision models stay visible on the provider row but not in text pickers", () => {
@@ -198,11 +181,9 @@ describe("parity with meta/llm-provider-catalog.json", () => {
     expect(providerOffersTextGeneration("typesafe")).toBe(false);
     expect(providerOffersTextGeneration("anthropic")).toBe(true);
     expect(providerOffersTextGeneration("openai-compatible")).toBe(true);
+    expect(getTextGenerationModelsForProvider("typesafe")).toEqual([]);
     expect(
-      getTextGenerationModelsForProvider("typesafe", catalogEnabledFlags({})),
-    ).toEqual([]);
-    expect(
-      getVisibleModelsForProvider("typesafe", catalogEnabledFlags({})).some(
+      getModelsForProvider("typesafe").some(
         (model) => model.id === "jev-latest",
       ),
     ).toBe(true);

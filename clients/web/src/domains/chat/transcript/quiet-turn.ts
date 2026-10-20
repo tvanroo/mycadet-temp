@@ -9,7 +9,6 @@ import {
   activityItemsToCardData,
   type ContentBlockGroup,
 } from "@/domains/chat/transcript/message-content";
-import { isSendUserMessageCall } from "@/domains/chat/utils/assistant-text-visibility";
 import { isUiSurfaceToolCall } from "@/domains/chat/utils/silent-tool-calls";
 import {
   COMMAND_KEYS,
@@ -161,11 +160,7 @@ function placeOf(toolCall: ChatMessageToolCall): QuietPlace | null {
 export function describeQuietStep(
   toolCall: ChatMessageToolCall,
 ): QuietStep | null {
-  if (
-    isSendUserMessageCall(toolCall) ||
-    isUiSurfaceToolCall(toolCall) ||
-    UNNAMED_TOOL_NAMES.has(toolCall.name)
-  ) {
+  if (isUiSurfaceToolCall(toolCall) || UNNAMED_TOOL_NAMES.has(toolCall.name)) {
     return null;
   }
   const place = placeOf(toolCall);
@@ -285,7 +280,6 @@ export function hasQuietTurnProgress(message: {
   toolCalls?: { name: string; pendingConfirmation?: unknown }[];
 }): boolean {
   return !!message.toolCalls?.some(
-    (toolCall) =>
-      !isSendUserMessageCall(toolCall) && !isUiSurfaceToolCall(toolCall),
+    (toolCall) => !isUiSurfaceToolCall(toolCall),
   );
 }

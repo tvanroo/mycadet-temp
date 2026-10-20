@@ -6,7 +6,10 @@
  * testable while keeping shared mutable state bundled in EventHandlerState.
  */
 
-import { SENTINEL_REDACTION_VERSION } from "@mycadet/service-contracts/redacted-credential";
+import {
+  neutralizeRedactedSentinels,
+  SENTINEL_REDACTION_VERSION,
+} from "@mycadet/service-contracts/redacted-credential";
 import type pino from "pino";
 import { v4 as uuid } from "uuid";
 
@@ -24,10 +27,7 @@ import type {
   TurnChannelContext,
   TurnInterfaceContext,
 } from "../channels/types.js";
-import { isAssistantFeatureFlagEnabled } from "../config/assistant-feature-flags.js";
 import { getConfig } from "../config/loader.js";
-import { SEND_USER_MESSAGE_TOOL_NAME } from "../config/send-user-message-constants.js";
-import { resolveSendUserMessageActive } from "../config/send-user-message-gate.js";
 import { recordEstimate } from "../context/estimator-calibration.js";
 import { stripInjectionsForCompaction } from "../context/strip-injections.js";
 import { getCalibrationProviderKey } from "../context/token-estimator.js";
@@ -61,12 +61,6 @@ import {
   setAgentLoopExitReasonOnLatestLog,
 } from "../persistence/llm-request-log-store.js";
 import { endSection, markSection } from "../persistence/slow-sync-log.js";
-import type { AssistantTextVisibility } from "../persistence/user-facing-content.js";
-import {
-  ASSISTANT_TEXT_VISIBILITY_KEY,
-  projectUserFacingContent,
-  sendUserMessageText,
-} from "../persistence/user-facing-content.js";
 import type { ContextWindowResult } from "../plugins/defaults/compaction/window-manager.js";
 import { indexMessageNow } from "../plugins/defaults/memory/indexer.js";
 import { backfillMemoryRecallLogMessageId } from "../plugins/defaults/memory/memory-recall-log-store.js";
@@ -79,18 +73,12 @@ import type {
   Message,
 } from "../providers/types.js";
 import { getCurrentSeq } from "../runtime/assistant-stream-state.js";
-import type { ForChatMint } from "../runtime/for-chat-mint-registry.js";
-import {
-  currentForChatMintWatermark,
-  forChatMintsSince,
-} from "../runtime/for-chat-mint-registry.js";
 import { conversationRevealNonce } from "../runtime/reveal-nonce.js";
 import {
   closeRevealProofWindow,
   currentRevealSuccessWatermark,
   openRevealProofWindow,
 } from "../runtime/reveal-success-registry.js";
-import { credentialKey } from "../security/credential-key.js";
 import { extractDomain } from "../tools/network/domain-normalize.js";
 import {
   classifyWebSearchFailure,
@@ -113,24 +101,18 @@ import {
   drainDirectiveDisplayBuffer,
 } from "./assistant-attachments.js";
 import type {
-  LiveRevealGuardEntry,
   ResolvedRevealCandidate,
   RevealCandidateRef,
 } from "./chat-credential-redaction.js";
 import {
-  buildLiveRevealGuardEntries,
   collectRevealRefsFromCommand,
   drainCandidateGuardedChunk,
   drainSentinelGuardedText,
   filterRefsByRevealProof,
-  neutralizeAndSwapLiveRevealValues,
   redactCandidateValuesLegacy,
-  redactSecretsForChat,
-  remintAuthoritiesFromCandidates,
   resolveProvenRevealCandidates,
   resolveRefIdentities,
   resolveRevealCandidates,
-  type SentinelRemintAuthority,
 } from "./chat-credential-redaction.js";
 import type { Conversation } from "./conversation.js";
 import type { AssistantSurface } from "./conversation-agent-loop.js";
@@ -326,13 +308,6 @@ export interface EventHandlerState {
   lastAssistantMessageId: string | undefined;
   /** Assistant rows that must join the turn's final disk-view export. */
   readonly assistantMessageIdsToSync: Set<string>;
-  /**
-   * Visibility marker stamped on {@link lastAssistantMessageId}, when the turn
-   * routed its reply through `send_user_message`. The turn's terminal
-   * `message_complete` SSE carries it so a client can give the live row the
-   * same per-row treatment history will hand it.
-   */
-  lastAssistantTextVisibility?: AssistantTextVisibility;
   /**
    * True when `handleLlmCallStarted` has reserved an empty assistant row
    * that has NOT yet been finalized via `handleMessageComplete`
@@ -546,7 +521,7 @@ export interface EventHandlerState {
    * Staged per tool_use in {@link pendingRevealRefsByToolUse} and promoted
    * here only when that tool's result arrives successfully; consumed at the
    * persist seams to scope the candidate fetch for redaction-sentinel
-   * enrichment. Only ever read when the `chat-credential-reveal` feature
+   * enrichment.
    * flag is on.
    */
   readonly revealCandidateRefs: RevealCandidateRef[];
@@ -589,44 +564,6 @@ export interface EventHandlerState {
    */
   pendingSentinelGuardBuffer: string;
   /**
-   * Precomputed live-swap entries for this turn's reveal candidates: when
-   * the model echoes a candidate's plaintext, the stream guard replaces it
-   * with its enriched sentinel before emission so the secret never reaches
-   * the wire. Primed asynchronously when `handleToolResult` confirms a
-   * staged reveal invocation actually succeeded — before the model's next
-   * text can echo the tool's stdout. Empty when the
-   * `chat-credential-reveal` flag is off.
-   */
-  liveRevealGuardEntries: readonly LiveRevealGuardEntry[];
-  /**
-   * Re-mint authorities derived from this turn's proven reveal candidates
-   * (see `remintAuthoritiesFromCandidates`), primed together with
-   * {@link liveRevealGuardEntries} behind the same dispatcher barrier so
-   * the live guard can consult them synchronously. Combined at each guard
-   * site with the `--for-chat` mints the reveal route recorded this run.
-   */
-  candidateRemintAuthorities: readonly SentinelRemintAuthority[];
-  /**
-   * `--for-chat` mint-registry watermark captured when this run's state
-   * was created. `turnForChatMints` returns only mints the reveal route
-   * recorded after this point — the guard's authority for re-minting a
-   * sentinel identity is an actually-executed reveal, never a parse of
-   * the requested command (which would let a quoted/commented-out
-   * invocation allowlist a forgery).
-   */
-  readonly forChatMintWatermark: number;
-  /**
-   * `credentialKey`-formatted identities of every reveal invocation THIS run
-   * staged from its own `tool_use` commands (`credentialKey` format). The
-   * conversation-scoping leg of re-mint authority: registry mints are
-   * global (a mint's request body carries no trustworthy conversation
-   * identity — see the registry module doc), so `turnForChatMints` accepts
-   * only mints whose identity this run itself requested. Staging parses
-   * the command the daemon actually dispatched — trusted context a
-   * subprocess env override can never rewrite.
-   */
-  readonly stagedRevealIdentities: Set<string>;
-  /**
    * `ui_show` tool calls whose streaming input has already been classified
    * for a surface placeholder (see {@link handleInputJsonDelta}). Holds both
    * outcomes, the ones that emitted `ui_surface_pending` and the ones whose
@@ -636,16 +573,6 @@ export interface EventHandlerState {
   readonly surfacePendingScannedToolUseIds: Set<string>;
   /** App previews whose cumulative JSON reached the client payload cap. */
   readonly cappedAppPreviewToolUseIds: Set<string>;
-  /**
-   * In-flight priming of {@link liveRevealGuardEntries}. The dispatcher
-   * awaits this before processing a `text_delta` (and before the
-   * end-of-message guard flush) so a fast reveal echo can never race the
-   * guard: without the barrier, a quick tool return plus a slow store read
-   * would let `drainSentinelGuardedText` run with an empty entry list and
-   * send the plaintext over SSE even though the persisted row redacts it.
-   * Cleared once settled — steady-state deltas await nothing.
-   */
-  liveRevealGuardPriming: Promise<void> | undefined;
   /**
    * Memoized resolution of {@link revealCandidateRefs} so a turn with many
    * persist flushes fetches each candidate's plaintext once. Invalidated by
@@ -767,13 +694,8 @@ export function createEventHandlerState(): EventHandlerState {
     toolOutputGuardBuffers: new Map(),
     revealCandidateCache: undefined,
     pendingSentinelGuardBuffer: "",
-    liveRevealGuardEntries: [],
-    candidateRemintAuthorities: [],
-    forChatMintWatermark: currentForChatMintWatermark(),
-    stagedRevealIdentities: new Set(),
     surfacePendingScannedToolUseIds: new Set(),
     cappedAppPreviewToolUseIds: new Set(),
-    liveRevealGuardPriming: undefined,
   };
 }
 
@@ -798,38 +720,13 @@ export function selectFinalComputerUseScreenshotCandidate(
 }
 
 /**
- * Resolve this turn's reveal candidates for chat sentinel redaction.
- *
- * Returns `undefined` when the `chat-credential-reveal` flag is off — the
- * persist seams then use the legacy `<redacted type="…" />` marker for
- * SCANNER matches, byte-identical to today (the candidate-aware
- * exact-match fallback still applies via
- * {@link resolvedRevealCandidatesForState}, which is deliberately not
- * flag-gated: keeping a proven revealed plaintext out of persisted rows
- * is independent of which marker format the client renders). When the
- * flag is on, returns the resolved candidates (possibly empty: sentinel
- * mode with nothing revealable). Resolution is memoized on the ref count
- * so plaintexts are fetched at most once per new batch of reveal
- * invocations.
- */
-async function chatRevealCandidates(
-  state: EventHandlerState,
-): Promise<readonly ResolvedRevealCandidate[] | undefined> {
-  if (!isAssistantFeatureFlagEnabled("chat-credential-reveal")) {
-    return undefined;
-  }
-  return resolvedRevealCandidatesForState(state);
-}
-
-/**
- * Flag-independent candidate resolution for the legacy-marker fallbacks:
- * a route-proven reveal plaintext must be kept out of persisted rows in
- * BOTH modes, so the fallback surfaces (tool results always; assistant
- * text when the sentinel flag is off) resolve candidates here directly.
+ * Candidate resolution for the legacy-marker fallbacks: a route-proven
+ * reveal plaintext must be kept out of persisted rows, so the fallback
+ * surfaces (tool results always; assistant text too) resolve candidates
+ * here directly.
  * Refs only exist when the reveal route actually served the identity
- * (see `filterRefsByRevealProof`), so with the flag off this performs no
- * store reads until a genuine reveal has already happened. Shares the
- * per-state memoization with {@link chatRevealCandidates}.
+ * (see `filterRefsByRevealProof`), so this performs no store reads until a
+ * genuine reveal has already happened.
  */
 async function resolvedRevealCandidatesForState(
   state: EventHandlerState,
@@ -850,127 +747,6 @@ async function resolvedRevealCandidatesForState(
   return state.revealCandidateCache.candidates;
 }
 
-/**
- * Kick off (or refresh) the live stream guard's swap entries from the
- * memoized candidate resolution. Called from `handleToolResult` once a
- * staged reveal invocation is confirmed successful — never at propose
- * time, since candidate resolution reads plaintext straight from the
- * store and the tool may yet be denied or cancelled. The store read is
- * asynchronous while the dispatcher moves on, so a slow
- * `getSecureKeyAsync` could let the next text deltas reach the guard
- * before entries exist. The pending promise is therefore recorded on
- * state and awaited by the dispatcher at the delta boundary (see
- * `dispatchAgentEvent`), turning the race into a barrier. If resolution
- * fails, the guard stays on its previous entries and the persist seams
- * still redact; the stream guard remains a wire-level layer, persistence
- * the redaction boundary.
- */
-function primeLiveRevealGuard(state: EventHandlerState): void {
-  const priming = chatRevealCandidates(state)
-    .then((candidates) => {
-      if (candidates !== undefined && candidates.length > 0) {
-        state.liveRevealGuardEntries = buildLiveRevealGuardEntries(candidates);
-        state.candidateRemintAuthorities =
-          remintAuthoritiesFromCandidates(candidates);
-      }
-    })
-    .catch((err: unknown) => {
-      log.debug(
-        { err },
-        "live reveal guard priming failed; stream swap stays inactive",
-      );
-    })
-    .finally(() => {
-      // Only clear our own registration — a later reveal in the same turn
-      // may have replaced the pending promise with a fresh one.
-      if (state.liveRevealGuardPriming === priming) {
-        state.liveRevealGuardPriming = undefined;
-      }
-    });
-  state.liveRevealGuardPriming = priming;
-}
-
-/**
- * Barrier for the live reveal guard: resolves once any in-flight priming
- * has settled. Awaited before text deltas are guarded and before the
- * end-of-message guard flush, so echoed plaintext can never beat the
- * guard entries onto the wire. No-op (no await, no microtask churn) when
- * nothing is being primed.
- */
-async function awaitLiveRevealGuardReady(
-  state: EventHandlerState,
-): Promise<void> {
-  // Loop: priming that settles can be superseded by a newer registration
-  // (two reveals back-to-back) before this await resumes.
-  while (state.liveRevealGuardPriming !== undefined) {
-    await state.liveRevealGuardPriming;
-  }
-}
-
-/**
- * `--for-chat` mints authorized for THIS run: recorded by the reveal route
- * after this run's watermark AND matching an identity this run itself
- * staged from its own `tool_use` commands. Both legs are load-bearing —
- * the registry proves a reveal EXECUTED (a quoted/commented-out invocation
- * never reaches the route), while the staging set scopes authority to the
- * conversation that actually requested it (registry records carry no
- * trustworthy conversation identity, so without this leg one
- * conversation's approved reveal could authorize a concurrent
- * conversation's forged sentinel). Read fresh at each guard site rather
- * than cached: the route records a mint while the reveal tool is still
- * executing, so by the time the model echoes the sentinel back the
- * registry is already current — no priming race like the async candidate
- * fetch has.
- */
-function turnForChatMints(
-  state: EventHandlerState,
-  deps: EventHandlerDeps,
-): ForChatMint[] {
-  if (state.stagedRevealIdentities.size === 0) {
-    return [];
-  }
-  const nonce = conversationRevealNonce(deps.ctx.conversationId);
-  return forChatMintsSince(state.forChatMintWatermark).filter(
-    (mint) =>
-      mint.nonce === nonce &&
-      state.stagedRevealIdentities.has(credentialKey(mint.service, mint.field)),
-  );
-}
-
-/**
- * Combined re-mint authorities for the LIVE emit sites (synchronous):
- * route-recorded `--for-chat` mints plus the candidate-derived authorities
- * primed behind the dispatcher barrier alongside the swap entries.
- */
-function liveRemintAuthorities(
-  state: EventHandlerState,
-  deps: EventHandlerDeps,
-): SentinelRemintAuthority[] {
-  return [
-    ...turnForChatMints(state, deps),
-    ...state.candidateRemintAuthorities,
-  ];
-}
-
-/**
- * Combined re-mint authorities for the PERSIST sites, deriving the
- * candidate half from the resolved candidate set the call site already
- * fetched — persistence must not depend on whether live priming ran
- * (a flush can outlive the stream), so it never reads the primed state.
- */
-function persistRemintAuthorities(
-  state: EventHandlerState,
-  deps: EventHandlerDeps,
-  candidates: readonly ResolvedRevealCandidate[] | undefined,
-): SentinelRemintAuthority[] {
-  return [
-    ...turnForChatMints(state, deps),
-    ...(candidates !== undefined && candidates.length > 0
-      ? remintAuthoritiesFromCandidates(candidates)
-      : []),
-  ];
-}
-
 // ── Partial-persistence helpers ──────────────────────────────────────
 
 /**
@@ -986,9 +762,7 @@ export function buildPersistedAssistantContent(
   rawBlocks: readonly ContentBlock[],
   surfaces: readonly AssistantSurface[],
   activityByToolUseId?: ReadonlyMap<string, ToolActivityMetadata>,
-  revealCandidates?: readonly ResolvedRevealCandidate[],
   legacyFallbackCandidates: readonly ResolvedRevealCandidate[] = [],
-  forChatMints: readonly SentinelRemintAuthority[] = [],
 ): ContentBlock[] {
   const { cleanedContent } = cleanAssistantContent(rawBlocks);
   const cleaned = cleanedContent as ContentBlock[];
@@ -1012,68 +786,21 @@ export function buildPersistedAssistantContent(
         : {}),
     } as unknown as ContentBlock);
   }
-  // One redactor for every block shape below, so the plain-text branch and the
-  // tool-delivered branch can never drift on which mode they run in.
-  const redact = (value: string): string =>
-    revealCandidates !== undefined
-      ? redactSecretsForChat(value, revealCandidates, forChatMints)
-      : redactCandidateValuesLegacy(value, legacyFallbackCandidates);
-
-  /**
-   * Give a delivered message the same cleaning a top-level text block gets:
-   * the projection turns it into this row's text, so a legacy
-   * `<cadet-attachment />` tag left inside it renders to the user verbatim.
-   * Running it through `cleanAssistantContent` rather than re-implementing the
-   * strip keeps the two from drifting as the directive syntax evolves.
-   *
-   * Discovery of the directive is separate and already runs over the projected
-   * blocks in `handleMessageComplete`, so this only removes the markup; the
-   * attachment it names is still resolved and linked to the row.
-   */
-  const stripDirectiveMarkup = (message: string): string => {
-    if (!message.includes("<cadet-attachment")) {
-      return message;
-    }
-    const [cleaned] = cleanAssistantContent([{ type: "text", text: message }])
-      .cleanedContent as Array<{ text?: unknown } | undefined>;
-    return typeof cleaned?.text === "string" ? cleaned.text : message;
-  };
-
   return withSurfaces.map((block) => {
-    // A `send_user_message` call carries text a user reads: the read-side
-    // projection turns it into this row's text block, and history, exports,
-    // previews and the lexical index all show it. It is redacted here, at the
-    // one place the row is built, so no secret the model quoted into the
-    // message reaches SQLite in the clear.
-    const delivered = sendUserMessageText(block);
-    if (delivered !== null) {
-      const redacted = redact(stripDirectiveMarkup(delivered));
-      if (redacted === delivered) {
-        return block;
-      }
-      const tu = block as Extract<ContentBlock, { type: "tool_use" }>;
-      return {
-        ...tu,
-        input: { ...tu.input, message: redacted },
-        _redactionVersion: SENTINEL_REDACTION_VERSION,
-      } as ContentBlock;
-    }
     if (block.type === "text") {
       const tb = block as Extract<ContentBlock, { type: "text" }>;
-      // Sentinel mode (chat-credential-reveal flag on) persists redactions
-      // the client can render as chips; legacy mode keeps the marker
-      // byte-identical to today. Detection is the same scanner either way.
-      // Both modes neutralize forged sentinel-shaped strings first so
-      // arbitrary content can never manufacture a reveal chip — only
-      // redactor-inserted sentinels survive persistence. The
+      // Persisted text is redacted twice over: the scanner's matches get the
+      // legacy `<redacted type="…" />` marker, and a route-proven reveal
+      // candidate's exact plaintext never persists raw even when the scanner
+      // cannot classify it. Forged sentinel-shaped strings are neutralized
+      // first, so arbitrary content can never manufacture a reveal chip. The
       // `_redactionVersion` rider (internal, same convention as `_startedAt`)
       // marks the block as neutralization-aware; `renderHistoryContent`
-      // neutralizes unmarked (pre-feature) blocks at read so forged sentinels
-      // in old history rows can never chip-ify either.
-      const text =
-        revealCandidates !== undefined
-          ? redactSecretsForChat(tb.text, revealCandidates, forChatMints)
-          : redactCandidateValuesLegacy(tb.text, legacyFallbackCandidates);
+      // neutralizes unmarked (pre-feature) blocks at read.
+      const text = redactCandidateValuesLegacy(
+        tb.text,
+        legacyFallbackCandidates,
+      );
       return { ...tb, text, _redactionVersion: SENTINEL_REDACTION_VERSION };
     }
     // Native server tools (Anthropic web_search) resolve mid-stream — their
@@ -1299,14 +1026,11 @@ async function flushAccumulatedContent(
     return;
   }
 
-  const revealCandidates = await chatRevealCandidates(state);
   const built = buildPersistedAssistantContent(
     state.currentMessageContent,
     [],
     state.toolActivityMetadata,
-    revealCandidates,
     await resolvedRevealCandidatesForState(state),
-    persistRemintAuthorities(state, deps, revealCandidates),
   );
   // Pair the seq with the exact content snapshot taken above: deltas that
   // arrive while the write is in flight bump `lastStreamedContentSeq`
@@ -1536,15 +1260,6 @@ function buildAssistantChannelMetadata(
 ): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     ...provenanceFromTrustContext(turnOrRestingTrust(deps.ctx)),
-    // A turn routing its reply through `send_user_message` writes working
-    // notes, so the row is marked private from the moment it is reserved: a
-    // turn that dies before `message_complete` still has its scratchpad
-    // projected out of every user-facing read. The finalize below re-stamps
-    // it, promoting the row to `"visible"` when the fallback surfaced the raw
-    // text after all.
-    ...(resolveSendUserMessageActive(deps.ctx)
-      ? { [ASSISTANT_TEXT_VISIBILITY_KEY]: "private" }
-      : {}),
     userMessageChannel: deps.turnChannelContext.userMessageChannel,
     assistantMessageChannel: deps.turnChannelContext.assistantMessageChannel,
     userMessageInterface: deps.turnInterfaceContext.userMessageInterface,
@@ -1712,8 +1427,6 @@ function handleTextDelta(
     // `pendingSentinelGuardBuffer` and flushed at message end.
     const guarded = drainSentinelGuardedText(
       state.pendingSentinelGuardBuffer + drained.emitText,
-      state.liveRevealGuardEntries,
-      liveRemintAuthorities(state, deps),
     );
     state.pendingSentinelGuardBuffer = guarded.bufferedRemainder;
     if (guarded.emitText.length > 0) {
@@ -1760,7 +1473,7 @@ function handleTextDelta(
 function announcesToolResultStatus(
   toolName: string | undefined,
 ): toolName is string {
-  return toolName !== undefined && toolName !== SEND_USER_MESSAGE_TOOL_NAME;
+  return toolName !== undefined;
 }
 
 function handleThinkingDelta(
@@ -1828,7 +1541,7 @@ export function handleToolUse(
     state.appBuildToolUsedThisRun = true;
   }
   // Record `credentials reveal` invocations so the persist seams can enrich
-  // redaction sentinels with a proven vault identity (chat-credential-reveal).
+  // redaction sentinels with a proven vault identity.
   // Tool-name agnostic on purpose: any shell-style tool (bash, host_bash)
   // carries the command in `input.command`. Pure string parse — no store
   // access happens here: `tool_use` precedes execution, and the refs are
@@ -1852,19 +1565,6 @@ export function handleToolUse(
         // retains plaintext only while some tool's proof is pending.
         proofWindowToken: openRevealProofWindow(),
       });
-      // The conversation-scoping leg of `--for-chat` re-mint authority:
-      // record which identities THIS run's own commands named. Retained for
-      // the whole run (unlike the staging entry, which handleToolResult
-      // consumes) — the model echoes the sentinel back only after the tool
-      // completes. Parse-only, so by itself this authorizes nothing; a
-      // registry mint (an executed reveal) must also exist.
-      for (const ref of refs) {
-        if (ref.service !== undefined && ref.field !== undefined) {
-          state.stagedRevealIdentities.add(
-            credentialKey(ref.service, ref.field),
-          );
-        }
-      }
     }
   }
   const startedAt = Date.now();
@@ -2456,7 +2156,6 @@ export async function handleToolResult(
     closeRevealProofWindow(stagedReveal.proofWindowToken);
     if (provenRefs.length > 0) {
       state.revealCandidateRefs.push(...provenRefs);
-      primeLiveRevealGuard(state);
     }
   }
 
@@ -3175,16 +2874,9 @@ export async function handleMessageComplete(
   const trailingLiveText =
     state.pendingSentinelGuardBuffer + state.pendingDirectiveDisplayBuffer;
   if (trailingLiveText.length > 0) {
-    // Same barrier as the text-delta path: the flush below swaps against
-    // `liveRevealGuardEntries`, so an in-flight priming must settle first.
-    await awaitLiveRevealGuardReady(state);
     deps.onEvent({
       type: "assistant_text_delta",
-      text: neutralizeAndSwapLiveRevealValues(
-        trailingLiveText,
-        state.liveRevealGuardEntries,
-        liveRemintAuthorities(state, deps),
-      ),
+      text: neutralizeRedactedSentinels(trailingLiveText),
       conversationId: deps.ctx.conversationId,
       messageId: state.lastAssistantMessageId,
     });
@@ -3237,17 +2929,8 @@ export async function handleMessageComplete(
   // it here separately is the cheapest way to keep the directive
   // side-effects local to this handler while letting the shared helper
   // own the persisted-content shape.
-  // On a row whose plain text is private working notes, the text a user reads
-  // is what `send_user_message` carried, so that is where an attachment
-  // directive has to be found: scanning the raw blocks would miss a
-  // `cadet://` link the model put in its message and the file would never be
-  // attached to the delivered reply.
   const { directives: msgDirectives, warnings: msgWarnings } =
-    cleanAssistantContent(
-      event.assistantTextVisibility === "private"
-        ? projectUserFacingContent(event.message.content, { toolGated: true })
-        : event.message.content,
-    );
+    cleanAssistantContent(event.message.content);
   state.accumulatedDirectives.push(...msgDirectives);
   state.directiveWarnings.push(...msgWarnings);
   if (msgDirectives.length > 0) {
@@ -3273,15 +2956,12 @@ export async function handleMessageComplete(
   // redacted) via the shared helper. The partial-persist flush uses
   // the same helper with `surfaces=[]` so a mid-turn snapshot lands in
   // the same shape as the finalize.
-  const finalRevealCandidates = await chatRevealCandidates(state);
   const contentForPersistence = stampThinkingTiming(
     buildPersistedAssistantContent(
       event.message.content as ContentBlock[],
       deps.ctx.currentTurnSurfaces,
       state.toolActivityMetadata,
-      finalRevealCandidates,
       await resolvedRevealCandidatesForState(state),
-      persistRemintAuthorities(state, deps, finalRevealCandidates),
     ),
     state.currentThinkingTimestamps,
   );
@@ -3304,18 +2984,9 @@ export async function handleMessageComplete(
   // assembly can attribute each assistant message to the model that actually
   // ran it — including per-call reroutes by a `pre-model-call` hook. Absent on
   // synthesized completions with no provider response; the key is omitted then.
-  // How this row's plain text reached the user, reported by the loop and
-  // stamped in the same transaction as the final content. Only a run under the
-  // tool-gated reply surface carries it: `"private"` for working notes the
-  // projection hides, `"visible"` for a fallback turn whose raw text the user
-  // actually saw and which therefore has to render and deliver like any reply.
   const finalizeMetadata: Record<string, unknown> = {
     ...(event.model ? { model: event.model } : {}),
-    ...(event.assistantTextVisibility
-      ? { [ASSISTANT_TEXT_VISIBILITY_KEY]: event.assistantTextVisibility }
-      : {}),
   };
-  state.lastAssistantTextVisibility = event.assistantTextVisibility;
   const persisted = await finalizeInflightContent(
     state.inflightWriters.get(assistantMessageId),
     assistantMessageId,
@@ -3626,11 +3297,6 @@ export async function dispatchAgentEvent(
         await handleLlmCallStarted(state, deps);
         break;
       case "text_delta":
-        // Reveal-guard barrier: if a `credentials reveal` tool_use just
-        // started priming the live guard, resolve it before this delta is
-        // guarded — otherwise a fast reveal echo could cross SSE with an
-        // empty entry list. Steady state awaits nothing.
-        await awaitLiveRevealGuardReady(state);
         handleTextDelta(state, deps, event);
         break;
       case "thinking_delta":

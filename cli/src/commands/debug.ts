@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cliCommand } from "../lib/cli-name.js";
 import { isCloudHome } from "../lib/cloud-values.js";
 import {
   formatAssistantReference,
@@ -68,7 +69,7 @@ export const debug = Object.assign(
 
     const cloudToken = readCloudToken();
     if (!cloudToken) {
-      console.error("Not logged in. Run 'cadet login' first.");
+      console.error(`Not logged in. Run '${cliCommand()} login' first.`);
       process.exit(1);
     }
     const cloudAssistantId = entry.cloudAssistantId?.trim();

@@ -18,7 +18,6 @@ import { saveCheckoutIntent } from "@/lib/billing/checkout-intent";
 import * as sdkGen from "@/generated/api/sdk.gen";
 import * as browserRuntime from "@/runtime/browser";
 import * as orgReadyMod from "@/hooks/use-is-org-ready";
-import * as takeoverMod from "@/hooks/use-marketing-pricing-takeover";
 
 const CHECKOUT_URL = "https://stripe.test/checkout/session";
 const INTENT_KEY = "cadet.pro-checkout-intent";
@@ -54,10 +53,6 @@ mock.module("@/hooks/use-is-org-ready", () => ({
   useOrgHeaderReadiness: () => "ready",
 }));
 
-mock.module("@/hooks/use-marketing-pricing-takeover", () => ({
-  ...takeoverMod,
-  useMarketingPricingTakeover: () => "enabled",
-}));
 
 const { useAuthStore } = await import("@/stores/auth-store");
 const { CheckoutPage } = await import("./checkout-page");

@@ -302,7 +302,7 @@ export function ThemeStagePage() {
   const tokens = useMemo(() => parseThemeStageTokens(rawTokens), [rawTokens]);
 
   // Standalone route bypasses RootLayout; bootstrap the device's base theme
-  // (light/dark/velvet) so the stage matches what the user's windows show.
+  // (light/dark) so the stage matches what the user's windows show.
   useAppTheme();
 
   useEffect(() => {

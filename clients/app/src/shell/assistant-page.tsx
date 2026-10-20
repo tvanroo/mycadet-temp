@@ -12,19 +12,16 @@ export function AssistantPage() {
   const config = readInjectedConfig();
   const location = useLocation();
   const navigate = useNavigate();
-  const selection = selectedAssistantId(location.state, config ?? {});
+  const selection = selectedAssistantId(location.state);
   return (
     <AppShell
-      apiBaseUrl={config?.cloudUrl}
       assistantId={selection ?? config?.assistantId}
       location={`${location.pathname}${location.search}${location.hash}`}
       origin={window.location.origin}
       onNavigate={(path, options) => {
         void navigate(path, {
           ...options,
-          state: selection
-            ? assistantSelectionState(selection, config ?? {})
-            : undefined,
+          state: selection ? assistantSelectionState(selection) : undefined,
         });
       }}
     />

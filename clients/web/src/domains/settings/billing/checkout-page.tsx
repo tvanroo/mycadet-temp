@@ -7,7 +7,6 @@ import { useMutation } from "@tanstack/react-query";
 import { organizationsBillingSubscriptionUpgradeCreateMutation } from "@/generated/api/@tanstack/react-query.gen";
 import { useOrgHeaderReadiness } from "@/hooks/use-is-org-ready";
 import { useTranslation } from "@/i18n";
-import { useMarketingPricingTakeover } from "@/hooks/use-marketing-pricing-takeover";
 import { useCloudGateWithPending } from "@/hooks/use-cloud-gate";
 import { checkoutContinuation } from "@/lib/billing/checkout-continuation";
 import {
@@ -68,11 +67,6 @@ function abandonCheckout() {
  *     window falls.
  *   - Gate `"disabled"`/`"gated"` → back to plans (its own gating owns the
  *     messaging).
- *   - `marketing-pricing-takeover` off → back to plans. The flag is the kill
- *     switch over the whole pricing funnel; a marketing link cached from while
- *     it was on still lands somewhere useful. Off landing mid-flight settles the
- *     attempt so the response can't open Stripe behind the switch; off landing
- *     after the hand-off leaves the checkout, and its stash, alone.
  *   - Org header still resolving → hold on the spinner; resolution over with no
  *     organization → the retryable error, whose retry re-runs that resolution.
  *   - Gate `"full"` → fire the upgrade once and either redirect to Stripe
@@ -120,10 +114,6 @@ function CheckoutPageContent() {
   // The tri-state, not the boolean: an id that hasn't arrived yet is worth
   // waiting for, and one that resolution concluded without is not.
   const orgReadiness = useOrgHeaderReadiness();
-  // Kill switch over the pricing funnel. `"pending"` until the real flag value
-  // lands — the flag defaults off, so redirecting on the cold-load default
-  // would bounce every legitimate deep link.
-  const takeover = useMarketingPricingTakeover();
   // Where to go when no purchase happens here. Onboarding hands off before the
   // funnel flag has necessarily resolved and passes its own next step, so a
   // pending→disabled transition resumes onboarding instead of stranding a new
@@ -179,7 +169,7 @@ function CheckoutPageContent() {
       });
       if (phaseRef.current !== "running") {
         // A bail settled the attempt while the upgrade was in flight. Drop the
-        // result: opening Stripe would defeat the kill switch, and stashing the
+        // result: opening Stripe would defeat the bail, and stashing the
         // package would resurrect what the bail cleared. The server may already
         // have minted a Checkout Session — an unvisited one bills nothing and
         // Stripe expires it on its own.
@@ -257,8 +247,7 @@ function CheckoutPageContent() {
     if (
       (!packageKey && !customSelection) ||
       gate === "disabled" ||
-      gate === "gated" ||
-      takeover === "disabled"
+      gate === "gated"
     ) {
       if (phaseRef.current === "handed_off") {
         // Checkout is already at Stripe and this route can't unwind it. The
@@ -276,14 +265,10 @@ function CheckoutPageContent() {
       navigate(bailTarget, { replace: true });
       return;
     }
-    // Hold until the funnel flag resolves and the cloud gate is full (a
-    // `"pending"` session lands here). The phase check keeps the branches below
-    // to a single attempt, whichever way they decide it.
-    if (
-      takeover !== "enabled" ||
-      gate !== "full" ||
-      phaseRef.current !== "idle"
-    ) {
+    // Hold until the cloud gate is full (a `"pending"` session lands here).
+    // The phase check keeps the branches below to a single attempt, whichever
+    // way they decide it.
+    if (gate !== "full" || phaseRef.current !== "idle") {
       return;
     }
     if (orgReadiness === "resolving") {
@@ -310,7 +295,6 @@ function CheckoutPageContent() {
     orgReadiness,
     packageKey,
     runCheckout,
-    takeover,
   ]);
 
   if (failed) {

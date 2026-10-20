@@ -144,7 +144,7 @@ for (const [status, message] of [
   [401, "Please sign in to continue."],
   [409, "Your assistant isn't ready."],
   [410, "This assistant is unavailable."],
-  [200, "Unable to load assistant."],
+  [200, "We couldn't reach your assistant"],
 ] as const) {
   test(`does not mount an iframe for HTTP ${status}`, async () => {
     request.mockResolvedValue(new Response("{}", { status }));
@@ -154,15 +154,40 @@ for (const [status, message] of [
   });
 }
 
-test("retries a not-ready assistant and mounts it once ready", async () => {
+test("wakes a not-ready assistant and mounts it once ready", async () => {
   request
     .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(json({ ok: true, action: "woke", output: "" }))
     .mockResolvedValueOnce(json(detail()));
   render(<AppShell {...props()} />);
   await screen.findByText("Your assistant isn't ready.");
-  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Wake it up" }));
   await screen.findByTitle("Assistant");
+  expect(request).toHaveBeenCalledTimes(3);
+  const wakeCall = request.mock.calls.find(([url]) =>
+    String(url).endsWith("/v1/assistants/assistant-1/wake/"),
+  );
+  expect(wakeCall?.[1]?.method).toBe("POST");
+});
+
+test("a failed wake shows the node's own punchline and offers the wake again", async () => {
+  request
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: "hatch_failed",
+          reason: "Firecracker exited with error",
+        }),
+        { status: 502 },
+      ),
+    );
+  render(<AppShell {...props()} />);
+  await screen.findByText("Your assistant isn't ready.");
+  fireEvent.click(screen.getByRole("button", { name: "Wake it up" }));
+  await screen.findByText("Firecracker exited with error");
   expect(request).toHaveBeenCalledTimes(2);
+  expect(screen.queryByTitle("Assistant")).toBeNull();
 });
 
 test("retries an API failure without account session probes", async () => {
@@ -170,7 +195,7 @@ test("retries an API failure without account session probes", async () => {
     .mockResolvedValueOnce(new Response(null, { status: 503 }))
     .mockResolvedValueOnce(json(detail()));
   render(<AppShell {...props()} />);
-  await screen.findByText("Unable to load assistant.");
+  await screen.findByText("We couldn't reach your assistant");
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await screen.findByTitle("Assistant");
   expect(request).toHaveBeenCalledTimes(2);
@@ -179,6 +204,16 @@ test("retries an API failure without account session probes", async () => {
       String(url).endsWith("/v1/assistants/assistant-1/"),
     ),
   ).toBe(true);
+});
+
+test("an API failure offers switching to another assistant", async () => {
+  request.mockResolvedValue(new Response(null, { status: 503 }));
+  render(<AppShell {...props()} />);
+  await screen.findByText("We couldn't reach your assistant");
+  fireEvent.click(screen.getByRole("button", { name: "Switch assistant" }));
+  expect(navigate).toHaveBeenCalledWith("/account/select-assistant", {
+    replace: false,
+  });
 });
 
 test("unmount aborts requests and ignores late replies", async () => {
@@ -223,23 +258,30 @@ test("changing assistant or API base immediately hides the previous frame", asyn
   await screen.findByTitle("Assistant");
 });
 
-test("without an ID the shell offers choices and fetches only the selected assistant", async () => {
-  request
-    .mockResolvedValueOnce(
-      json({
-        results: [
-          { id: "assistant-1", name: "One" },
-          { id: "assistant-2", name: "Two" },
-        ],
-      }),
-    )
-    .mockResolvedValueOnce(json(detail("assistant-2")));
-  render(<AppShell {...props()} assistantId={undefined} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Two" }));
-  await screen.findByTitle("Assistant");
-  expect(String(request.mock.calls[1][0])).toBe(
-    "https://site.example.com/v1/assistants/assistant-2/",
+test("without an ID the shell hands off to the account chooser", async () => {
+  request.mockResolvedValue(
+    json({
+      results: [
+        { id: "assistant-1", name: "One" },
+        { id: "assistant-2", name: "Two" },
+      ],
+    }),
   );
+  render(<AppShell {...props()} assistantId={undefined} />);
+  await screen.findByText("Choose an assistant.");
+  expect(navigate).toHaveBeenCalledWith("/account/select-assistant", {
+    replace: true,
+  });
+  expect(screen.queryByRole("button", { name: "Two" })).toBeNull();
+});
+
+test("empty and unauthenticated states hand off to the chooser too", async () => {
+  request.mockResolvedValue(json({ results: [] }));
+  render(<AppShell {...props()} assistantId={undefined} />);
+  await screen.findByText("No assistant is available.");
+  expect(navigate).toHaveBeenCalledWith("/account/select-assistant", {
+    replace: true,
+  });
 });
 
 test("embedded shells follow the app locale", async () => {

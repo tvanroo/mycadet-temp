@@ -8,18 +8,17 @@
  * which validates the state and registers the token with the local server so
  * its cloud proxy can authenticate — no browser session cookie is used.
  */
-import { readInjectedConfig } from "@/lib/injected-config";
+import { cloudWebUrl } from "@mycadet/environments/seeds";
 
-const FALLBACK_WEB_URL = "https://www.mycadet.ai";
 const LOOPBACK_STATE_KEY = "cadet:loopback:state";
 const LOOPBACK_RETURN_TO_KEY = "cadet:loopback:returnTo";
 
-function getLocalConfig(): { webUrl: string } {
-  const injected = readInjectedConfig();
-  if (injected?.webUrl) {
-    return { webUrl: injected.webUrl };
-  }
-  return { webUrl: FALLBACK_WEB_URL };
+/** The cloud login base comes from the build's environment seed, not the
+ * injected config — the config carries only the origins a served bundle
+ * can't infer, and the loopback handoff only runs in standalone local mode
+ * where the build's seed owns the routing. */
+function cloudLoginUrl(page: string, callbackReturnTo: string): string {
+  return `${cloudWebUrl(import.meta.env.VITE_ENVIRONMENT)}/account/${page}?returnTo=${encodeURIComponent(callbackReturnTo)}`;
 }
 
 function generateState(): string {
@@ -28,19 +27,10 @@ function generateState(): string {
   return Array.from(array, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function isPlatformLocal(): boolean {
-  return getLocalConfig().webUrl === window.location.origin;
-}
-
-export function useIsPlatformLocal(): boolean {
-  return isPlatformLocal();
-}
-
 export async function startLoopbackAuth(
   returnTo?: string,
   options?: { intent?: string },
 ): Promise<void> {
-  const { webUrl } = getLocalConfig();
   const state = generateState();
   const port = window.location.port || "3000";
 
@@ -51,7 +41,6 @@ export async function startLoopbackAuth(
 
   const callbackReturnTo = `/accounts/cli/callback?port=${port}&state=${state}`;
   const page = options?.intent === "signup" ? "signup" : "login";
-  const loginUrl = `${webUrl}/account/${page}?returnTo=${encodeURIComponent(callbackReturnTo)}`;
 
-  window.location.href = loginUrl;
+  window.location.href = cloudLoginUrl(page, callbackReturnTo);
 }

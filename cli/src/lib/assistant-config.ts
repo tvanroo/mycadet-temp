@@ -134,33 +134,68 @@ interface LockfileData {
   assistants?: Record<string, unknown>[];
   activeAssistant?: string;
   cloudBaseUrl?: string;
-  tunnel?: RootProcessRecord;
-  app?: RootProcessRecord;
-  /** The nginx edge's shell selection; see readEdgeShellSelection. */
-  edgeShell?: unknown;
+  tunnel?: TunnelProcessRecord;
+  app?: AppProcessRecord;
   [key: string]: unknown;
 }
 
 /**
- * A CLI-managed OS process recorded at the lockfile root, keyed by what it is
- * for — `tunnel` (the auto-tunnel agent fronting the edge) and `app` (the
- * nginx ingress edge). `cadet ps` renders these alongside the per-assistant
- * process trees, and the stop paths verify the pid before signaling it.
+ * A CLI-managed OS process recorded at the lockfile root under `tunnel`:
+ * the auto-tunnel agent fronting the edge. `cadet ps` renders it alongside
+ * the per-assistant process trees, and the stop paths verify the pid before
+ * signaling it.
  */
-export interface RootProcessRecord {
+export interface TunnelProcessRecord {
   pid: number;
-  /** Which tunnel provider owns the process; "tunnel" entries only. */
-  provider?: string;
+  /** Which tunnel provider owns the process. */
+  provider: string;
   /** The assistant the process fronts, so `cadet ps` can nest the row. */
   assistantId?: string;
   startedAt: string;
-  /** Listening port for the nginx edge. */
-  port?: number;
-  /** Managed process temporarily displaced by a pairing-only tunnel. */
-  previous?: RootProcessRecord;
+  /** The public URL the tunnel agent serves. */
+  publicUrl?: string;
+  /** Tunnel temporarily displaced by a pairing-only tunnel. */
+  previous?: TunnelProcessRecord;
 }
 
-export type RootProcessKind = "tunnel" | "app";
+/**
+ * A CLI-managed OS process recorded at the lockfile root under `app`: the
+ * nginx ingress edge (web artifacts, `/v1` proxying, the outer shell).
+ * Shares nothing with the tunnel record beyond the pid bookkeeping — a
+ * tunnel serves a URL, the edge serves a port.
+ */
+export interface AppProcessRecord {
+  /**
+   * The edge process's bookkeeping, present while the edge runs. Absent on
+   * a stamp-only entry: the built-sha stamp below survives the edge's own
+   * stop, so between runs the `app` entry may carry only that.
+   */
+  pid?: number;
+  /** The assistant the edge fronts, so `cadet ps` can nest the row. */
+  assistantId?: string;
+  startedAt?: string;
+  /** Listening port for the nginx edge. */
+  port?: number;
+  /**
+   * The commit the edge's source-built client bundles were last built from
+   * — the auto-build staleness stamp. Lives on the edge's own record rather
+   * than beside each dist so the CLI lockfile is the single home for edge
+   * state, and survives the edge's own stop (a build-cache fact, not a
+   * process fact) so restarting the edge never pays a needless rebuild.
+   */
+  builtSha?: string;
+}
+
+/** Either lockfile-root process record, keyed by `RootProcessKind`. */
+export type RootProcessRecord = TunnelProcessRecord | AppProcessRecord;
+
+/** The lockfile-root process entries keyed by their kind. */
+export interface RootProcessRecords {
+  tunnel?: TunnelProcessRecord;
+  app?: AppProcessRecord;
+}
+
+export type RootProcessKind = keyof RootProcessRecords;
 
 /**
  * Derive the daemon PID file path from a resources object. The PID file
@@ -224,13 +259,13 @@ function withCliLockfileLock<T>(fn: () => T): T {
 }
 
 /** Record a CLI-managed root process (tunnel agent, app edge) by pid. */
-export function stampRootProcess(
-  kind: RootProcessKind,
-  record: RootProcessRecord,
+export function stampRootProcess<K extends RootProcessKind>(
+  kind: K,
+  record: RootProcessRecords[K],
 ): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
-    data[kind] = record;
+    (data as RootProcessRecords)[kind] = record;
     writeLockfileUnlocked(data);
   });
 }
@@ -242,13 +277,16 @@ export function clearRootProcess(
 ): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
-    const record = data[kind];
+    const record = (data as RootProcessRecords)[kind];
     if (
       record === undefined ||
       (expectedPid !== undefined && record.pid !== expectedPid)
     )
       return;
-    if (record.previous) data[kind] = record.previous;
+    // Only a tunnel record carries a displaced predecessor to restore.
+    const previous =
+      kind === "tunnel" ? (record as TunnelProcessRecord).previous : undefined;
+    if (previous) (data as RootProcessRecords).tunnel = previous;
     else delete data[kind];
     writeLockfileUnlocked(data);
   });
@@ -258,31 +296,57 @@ export function clearRootProcess(
  * Read the root-level process entries for `cadet ps`. Read-only: no lock, so
  * a concurrently-updating lockfile is fine — the pid is verified separately.
  */
-export function readRootProcesses(): {
-  tunnel?: RootProcessRecord;
-  app?: RootProcessRecord;
-} {
-  const data = readLockfile();
+export function readRootProcesses(): RootProcessRecords {
+  const data = readLockfile() as LockfileData & RootProcessRecords;
   return { tunnel: data.tunnel, app: data.app };
 }
 
 /**
- * The nginx edge's shell selection, persisted at the lockfile root beside the
- * `app` record that tracks the edge's process. The edge is a CLI-managed
- * server rather than a per-cadet setting, and that record is lifecycle-scoped
- * (cleared when the edge stops), so the selection lives on its own root key
- * to survive restarts. Read raw: the lockfile is user-editable disk state,
- * so the shape check lives with the readers.
+ * The edge's recorded built-sha stamp (the auto-build staleness marker the
+ * resolver compares against the checkout's HEAD), or undefined when none is
+ * recorded yet.
  */
-export function readEdgeShellSelection(): unknown {
-  return readLockfile().edgeShell;
+export function readAppBuiltSha(): string | undefined {
+  return readRootProcesses().app?.builtSha;
 }
 
-/** Persist the nginx edge's shell selection under the lockfile lock. */
-export function saveEdgeShellSelection(shell: "web" | "app"): void {
+/**
+ * Record the built-sha stamp on the `app` entry, creating a stamp-only entry
+ * when the edge has not stamped its process yet (the stamp is written as
+ * soon as a build lands, before the edge process exists).
+ */
+export function stampAppBuiltSha(builtSha: string): void {
   withCliLockfileLock(() => {
     const data = readLockfile();
-    data.edgeShell = shell;
+    if (data.app) {
+      data.app.builtSha = builtSha;
+    } else {
+      data.app = { builtSha };
+    }
+    writeLockfileUnlocked(data);
+  });
+}
+
+/**
+ * Release the edge's process entry. The built-sha stamp is a build-cache
+ * fact rather than a process fact, so it is kept while the pid bookkeeping
+ * goes — restarting the edge re-stamps the process fields without paying a
+ * needless bundle rebuild.
+ */
+export function clearAppProcessRecord(expectedPid?: number): void {
+  withCliLockfileLock(() => {
+    const data = readLockfile();
+    const record = data.app;
+    if (
+      record === undefined ||
+      (expectedPid !== undefined && record.pid !== expectedPid)
+    )
+      return;
+    if (record.builtSha !== undefined) {
+      data.app = { builtSha: record.builtSha };
+    } else {
+      delete data.app;
+    }
     writeLockfileUnlocked(data);
   });
 }
@@ -818,7 +882,7 @@ export async function allocateLocalResources(
  */
 export function getLockfilePlatformBaseUrl(): string | undefined {
   const lockfile = readLockfile();
-  const url = lockfile.cloudBaseUrl ?? lockfile.platformBaseUrl;
+  const url = lockfile.cloudBaseUrl;
   if (typeof url === "string" && url.trim()) return url.trim();
   return undefined;
 }

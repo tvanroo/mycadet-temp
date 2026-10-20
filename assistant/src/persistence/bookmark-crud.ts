@@ -5,7 +5,6 @@ import type { DrizzleDb } from "./db-connection.js";
 import { stringifyMessageContent } from "./message-content.js";
 import { messageConversationId } from "./message-reads.js";
 import { conversations, messageBookmarks, messages } from "./schema.js";
-import { projectPersistedRowText } from "./user-facing-content.js";
 
 /**
  * Wire-shape representation of a bookmark, joined with the bookmarked
@@ -35,14 +34,9 @@ const PREVIEW_MAX_CHARS = 240;
  * `PREVIEW_MAX_CHARS`. Without the decode step, modern rows would render as
  * raw JSON in the bookmark list.
  *
- * The row's own metadata decides what the preview may quote: a
- * `send_user_message` turn's plain text is private working notes, so the
- * preview shows the message the user actually read instead.
  */
-function buildPreview(content: string, metadata: string | null): string {
-  const text = stringifyMessageContent(
-    projectPersistedRowText(content, metadata),
-  );
+function buildPreview(content: string): string {
+  const text = stringifyMessageContent(content);
   return text.length > PREVIEW_MAX_CHARS
     ? text.slice(0, PREVIEW_MAX_CHARS)
     : text;
@@ -82,7 +76,7 @@ function rowToSummary(row: BookmarkJoinRow): BookmarkSummary {
     messageId: row.messageId,
     conversationId: row.conversationId,
     conversationTitle: row.conversationTitle,
-    messagePreview: buildPreview(row.messageContent, row.messageMetadata),
+    messagePreview: buildPreview(row.messageContent),
     messageRole: row.messageRole,
     messageCreatedAt: row.messageCreatedAt,
     createdAt: row.createdAt,

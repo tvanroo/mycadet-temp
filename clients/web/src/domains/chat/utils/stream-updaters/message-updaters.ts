@@ -12,7 +12,6 @@
 import { isNoResponseOnlyText } from "@mycadet/service-contracts/no-response";
 
 import type { DisplayMessage } from "@/domains/chat/types/types";
-import { readAssistantTextVisibility } from "@/domains/chat/utils/assistant-text-visibility";
 import { messagePlainText } from "@/domains/chat/utils/message-plain-text";
 import { toDisplayAttachments } from "@/utils/display-attachments";
 import type {
@@ -378,11 +377,6 @@ export function finalizeMessageComplete(
 ): DisplayMessage[] {
   const last = prev[prev.length - 1];
   const attachments = toDisplayAttachments(event.attachments);
-  // Whether the row's plain text is something the user reads, stamped on the
-  // live row from the same event that finalizes it, so it renders the way its
-  // persisted twin does with no refetch in between.
-  const assistantTextVisibility = readAssistantTextVisibility(event);
-  const visibility = assistantTextVisibility ? { assistantTextVisibility } : {};
   // The profile Auto picked for the turn, stamped on the live row from the
   // same terminal event (completion or handoff) so it shows without waiting
   // for a history refetch.
@@ -402,7 +396,6 @@ export function finalizeMessageComplete(
         role: "assistant" as const,
         timestamp: at,
         attachments,
-        ...visibility,
         ...membership,
       },
     ];
@@ -417,7 +410,6 @@ export function finalizeMessageComplete(
       ...(adoptServerId ? { id: event.messageId!, isOptimistic: false } : {}),
       ...(attachments ? { attachments } : {}),
       ...(finalized ?? {}),
-      ...visibility,
       ...membership,
       // Deliberate silence, derived at fold time from the shared sentinel
       // contract: the daemon stamps the durable row after the turn, but the

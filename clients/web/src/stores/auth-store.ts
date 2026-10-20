@@ -1044,14 +1044,6 @@ const useAuthStoreBase = create<AuthStore>()((set, get) => ({
     // from the page.
     if (onPublicPairingRoute()) {
       await endSession(set, { keepCloudSession: true });
-      if (isServedGatewayRuntime()) {
-        // A served-gateway browser shares no platform cookie space and never
-        // probes the cloud, so settle the probe here as the served branch
-        // below does. Left `"unknown"`, the route guard arms a revalidation
-        // on it that fires when the pairing settles the session, remounting
-        // the pair page mid-exchange.
-        set({ cloudSession: "absent" });
-      }
       return;
     }
     // Gateway-token JWT scheme — refresh what we hold, else prime below.

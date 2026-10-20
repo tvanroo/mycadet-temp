@@ -5277,9 +5277,6 @@ paths:
                 properties:
                   conversations:
                     default:
-                      autoArchive:
-                        enabled: false
-                        afterDays: 7
                       skipAutoRetitling: false
                       backgroundInjection:
                         This is a background turn — your guardian isn't watching. If anything noteworthy comes up, send
@@ -5288,29 +5285,6 @@ paths:
                       resumeProcessingOnStartup: false
                     type: object
                     properties:
-                      autoArchive:
-                        default:
-                          enabled: false
-                          afterDays: 7
-                        type: object
-                        properties:
-                          enabled:
-                            default: false
-                            description: Automatically mark eligible inactive chats Done.
-                            type: boolean
-                          afterDays:
-                            default: 7
-                            description: Elapsed days of inactivity before a chat is eligible for Done.
-                            type: number
-                            enum:
-                              - 1
-                              - 7
-                              - 14
-                              - 30
-                        required:
-                          - enabled
-                          - afterDays
-                        additionalProperties: false
                       skipAutoRetitling:
                         default: false
                         description:
@@ -5337,7 +5311,6 @@ paths:
                           a turn that repeatedly interrupts the process is eventually left idle.
                         type: boolean
                     required:
-                      - autoArchive
                       - skipAutoRetitling
                       - backgroundInjection
                       - resumeProcessingOnStartup
@@ -8461,9 +8434,6 @@ paths:
                 properties:
                   conversations:
                     default:
-                      autoArchive:
-                        enabled: false
-                        afterDays: 7
                       skipAutoRetitling: false
                       backgroundInjection:
                         This is a background turn — your guardian isn't watching. If anything noteworthy comes up, send
@@ -8472,29 +8442,6 @@ paths:
                       resumeProcessingOnStartup: false
                     type: object
                     properties:
-                      autoArchive:
-                        default:
-                          enabled: false
-                          afterDays: 7
-                        type: object
-                        properties:
-                          enabled:
-                            default: false
-                            description: Automatically mark eligible inactive chats Done.
-                            type: boolean
-                          afterDays:
-                            default: 7
-                            description: Elapsed days of inactivity before a chat is eligible for Done.
-                            type: number
-                            enum:
-                              - 1
-                              - 7
-                              - 14
-                              - 30
-                        required:
-                          - enabled
-                          - afterDays
-                        additionalProperties: false
                       skipAutoRetitling:
                         default: false
                         description:
@@ -8521,7 +8468,6 @@ paths:
                           a turn that repeatedly interrupts the process is eventually left idle.
                         type: boolean
                     required:
-                      - autoArchive
                       - skipAutoRetitling
                       - backgroundInjection
                       - resumeProcessingOnStartup
@@ -16665,48 +16611,6 @@ paths:
                   - ok
                   - updated
                 additionalProperties: false
-  /v1/conversations/summarize:
-    post:
-      operationId: conversations_summarize_post
-      summary: Summarize a conversation up to a message
-      description:
-        Replace the conversation's context before the given message with a generated summary. The boundary snaps to
-        the start of the turn containing beforeMessageId; that turn and everything after stay verbatim. Messages are
-        never deleted.
-      tags:
-        - conversations
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                conversationId:
-                  type: string
-                beforeMessageId:
-                  type: string
-                  description: Summarize all messages before this one
-              required:
-                - conversationId
-                - beforeMessageId
-      responses:
-        "202":
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  accepted:
-                    type: boolean
-                    const: true
-                  conversationId:
-                    type: string
-                required:
-                  - accepted
-                  - conversationId
-                additionalProperties: false
   /v1/conversations/switch:
     post:
       operationId: conversations_switch_post
@@ -17144,9 +17048,7 @@ paths:
     post:
       operationId: credentials_reveal_post
       summary: Reveal a credential's plaintext value
-      description:
-        Return the raw plaintext value of a stored credential. Blocked in untrusted shell mode. With forChat,
-        returns a chat-safe redaction sentinel instead of the plaintext.
+      description: Return the raw plaintext value of a stored credential. Blocked in untrusted shell mode.
       tags:
         - credentials
       requestBody:
@@ -17165,16 +17067,11 @@ paths:
                 id:
                   description: Credential UUID for lookup by ID
                   type: string
-                forChat:
-                  description:
-                    Return the credential's redaction sentinel (renders as a click-to-reveal chip in chat) instead of the
-                    plaintext. Requires the chat-credential-reveal feature flag.
-                  type: boolean
                 revealNonce:
                   description:
                     Conversation-bound reveal nonce from the tool-shell environment. Scopes any recorded chat-redaction
-                    authority (plaintext proof or forChat mint) to the conversation whose tool executed this reveal;
-                    without it the reveal succeeds but records no authority.
+                    authority (the plaintext proof) to the conversation whose tool executed this reveal; without it the
+                    reveal succeeds but records no authority.
                   type: string
       responses:
         "200":
@@ -17186,7 +17083,7 @@ paths:
                 properties:
                   value:
                     type: string
-                    description: The plaintext credential value (or its redaction sentinel when forChat is set)
+                    description: The plaintext credential value
                 required:
                   - value
                 additionalProperties: false
@@ -27879,11 +27776,6 @@ paths:
                         cameraFrame:
                           type: boolean
                           const: true
-                        assistantTextVisibility:
-                          type: string
-                          enum:
-                            - private
-                            - visible
                         reaction:
                           type: object
                           properties:
@@ -42070,7 +41962,6 @@ paths:
                             enum:
                               - light
                               - dark
-                              - velvet
                               - system
                           tokens:
                             type: object
@@ -42656,26 +42547,7 @@ components:
         conversations:
           anyOf:
             - type: object
-              properties:
-                autoArchive:
-                  anyOf:
-                    - type: object
-                      properties:
-                        enabled:
-                          anyOf:
-                            - type: boolean
-                            - type: "null"
-                        afterDays:
-                          anyOf:
-                            - type: number
-                              enum:
-                                - 1
-                                - 7
-                                - 14
-                                - 30
-                            - type: "null"
-                      additionalProperties: {}
-                    - type: "null"
+              properties: {}
               additionalProperties: {}
             - type: "null"
         notifications:
@@ -43795,8 +43667,6 @@ components:
           type: boolean
         supportsToolUse:
           type: boolean
-        featureFlag:
-          type: string
       required:
         - provider
         - id

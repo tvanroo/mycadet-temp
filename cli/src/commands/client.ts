@@ -87,8 +87,8 @@ const AssistantIdBodySchema = z.object({
 
 const TokenBodySchema = z.object({ token: z.unknown() }).nullable();
 
-const SyncPlatformBodySchema = z.object({
-  syncPlatform: z.unknown().optional(),
+const SyncCloudBodySchema = z.object({
+  syncPlatform: z.boolean().optional(),
   cloudAssistants: z.array(z.record(z.string(), z.unknown())).optional(),
   organizationId: z.string().optional(),
   rename: z.object({ assistantId: z.string(), name: z.string() }).optional(),
@@ -499,7 +499,7 @@ const PAIRING_POLL_PATTERN = /^(?:\/assistant)?\/__local\/pairing-poll$/;
 const PAIRING_CANCEL_PATTERN = /^(?:\/assistant)?\/__local\/pairing-cancel$/;
 const GUARDIAN_TOKEN_PATTERN =
   /^(?:\/assistant)?\/__local\/guardian-token\/([^/]+)$/;
-const PLATFORM_SESSION_PATTERN = /^(?:\/assistant)?\/__local\/cloud-session$/;
+const CLOUD_SESSION_PATTERN = /^(?:\/assistant)?\/__local\/cloud-session$/;
 
 // The loopback platform session token. Persisted via the same store the CLI
 // uses (so `cadet client` restarts and CLI logins stay in sync), cached here
@@ -557,7 +557,7 @@ async function handleLocalEndpoints(
     PAIRING_POLL_PATTERN.test(pathname) ||
     PAIRING_CANCEL_PATTERN.test(pathname) ||
     GUARDIAN_TOKEN_PATTERN.test(pathname) ||
-    PLATFORM_SESSION_PATTERN.test(pathname) ||
+    CLOUD_SESSION_PATTERN.test(pathname) ||
     parseGatewayUrl(pathname).match ||
     parsePairedGatewayUrl(pathname).match;
 
@@ -579,7 +579,7 @@ async function handleLocalEndpoints(
   // Platform session: the SPA hands over the loopback token here (after it has
   // validated the `state` nonce) so the proxy below can authenticate to the
   // platform. The browser never holds a session cookie.
-  if (PLATFORM_SESSION_PATTERN.test(pathname)) {
+  if (CLOUD_SESSION_PATTERN.test(pathname)) {
     if (req.method === "DELETE") {
       clearCloudToken();
       cloudSessionToken = null;
@@ -614,9 +614,9 @@ async function handleLocalEndpoints(
       return new Response(null, { status: result.status });
     }
     if (req.method === "POST") {
-      let body: z.infer<typeof SyncPlatformBodySchema>;
+      let body: z.infer<typeof SyncCloudBodySchema>;
       try {
-        const parsed = SyncPlatformBodySchema.safeParse(await req.json());
+        const parsed = SyncCloudBodySchema.safeParse(await req.json());
         if (!parsed.success) throw new Error("invalid body");
         body = parsed.data;
       } catch {
@@ -1301,17 +1301,15 @@ async function spawnBackgroundWebInterface(
  * report a false `foreign`. An absent id is deliberately benign to the probe.
  */
 export function buildWebInterfaceConfig(opts: {
-  webUrl: string;
   cloudUrl: string;
-  version?: string;
+  version: string;
 }): Record<string, unknown> {
-  const { webUrl, cloudUrl } = opts;
+  const { cloudUrl } = opts;
   return {
-    webUrl,
     cloudUrl,
     // Which CLI build is serving — the same string `cadet-local --version`
     // prints, so devtools and the settings page answer identically.
-    ...(opts.version ? { version: opts.version } : {}),
+    version: opts.version,
   };
 }
 
@@ -1335,7 +1333,6 @@ async function runWebInterface(
       disableCloud,
       openInBrowser,
       webPort,
-      displayVersion(cliPkg.version),
     );
   }
 
@@ -1352,12 +1349,10 @@ async function runWebInterface(
 
   const rawIndexHtml = await Bun.file(path.join(distDir, "index.html")).text();
   const cloudUrl = getCloudUrl();
-  const webUrl = getWebUrl();
   const safeJson = (v: unknown) =>
     JSON.stringify(v).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
   const configJson = safeJson(
     buildWebInterfaceConfig({
-      webUrl,
       cloudUrl,
       version: displayVersion(cliPkg.version),
     }),
@@ -1539,7 +1534,6 @@ async function runViteDevServer(
   disableCloud: boolean,
   openInBrowser: boolean,
   webPort: number | undefined,
-  serveVersion: string,
 ): Promise<void> {
   const cloudUrl = getCloudUrl();
 
@@ -1567,12 +1561,10 @@ async function runViteDevServer(
       ...flagEnvVars,
       ...viteFlagVars,
       ...(disableCloud ? { VITE_CADET_DISABLE_CLOUD: "true" } : {}),
-      VITE_CLOUD_MODE: "false",
       VITE_WEB_MODE: "full",
       API_PROXY_TARGET: cloudUrl,
       CADET_WEB_URL: getWebUrl(),
       CADET_CLOUD_URL: cloudUrl,
-      CADET_CONFIG_VERSION: serveVersion,
       PORT: String(port),
     },
   });

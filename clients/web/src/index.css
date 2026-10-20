@@ -1343,26 +1343,6 @@ html[data-page-transition="pop"]::view-transition-new(root) {
   background-clip: padding-box;
 }
 
-[data-theme="velvet"] {
-  scrollbar-color: rgba(232, 63, 91, 0.28) transparent;
-}
-
-[data-theme="velvet"] *,
-[data-theme="velvet"] *::before,
-[data-theme="velvet"] *::after {
-  scrollbar-color: rgba(232, 63, 91, 0.28) transparent;
-}
-
-[data-theme="velvet"] ::-webkit-scrollbar-thumb {
-  background: rgba(232, 63, 91, 0.28);
-  background-clip: padding-box;
-}
-
-[data-theme="velvet"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(232, 63, 91, 0.5);
-  background-clip: padding-box;
-}
-
 /* Sidebar menu scrollbar: hidden permanently, not just at rest. A native
  * scrollbar can't both take zero layout space at every moment (hover
  * included) and be visible on hover: toggling its width to reveal it
@@ -2024,15 +2004,14 @@ html[data-page-transition="pop"]::view-transition-new(root) {
 }
 
 /* About Assistant bento: cards sit on pure white in light mode and pure
-   black in dark/velvet (a deliberate departure from the surface tokens),
+   black in dark (a deliberate departure from the surface tokens),
    with the avatar-color wash applied in light mode only. The bento's
    inline card-background color-mix reads both variables. */
 .identity-bento {
   --card-tint-pct: 5%;
   --card-surface: #ffffff;
 }
-[data-theme="dark"] .identity-bento,
-[data-theme="velvet"] .identity-bento {
+[data-theme="dark"] .identity-bento {
   --card-tint-pct: 0%;
   --card-surface: #000000;
 }

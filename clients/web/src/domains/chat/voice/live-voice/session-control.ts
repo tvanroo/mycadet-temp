@@ -26,13 +26,11 @@ import type {
 } from "@/domains/chat/voice/live-voice/protocol";
 import { liveVoiceCanBeShownTheScreen } from "@/domains/chat/voice/live-voice/screen-share-availability";
 import { isVoiceCameraSupported } from "@/domains/chat/voice/voice-room/voice-camera";
-import { isVisionModeOn } from "@/hooks/use-vision-mode-flag";
 import { supportsSightStream } from "@/lib/backwards-compat/use-supports-sight-stream";
 import {
   canCompanionShareScreen,
   setCompanionScreenShare,
 } from "@/runtime/companion-surface";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 
 /**
  * Entries whose call has no voice room: the companion's pill and the voice
@@ -66,10 +64,7 @@ export function liveVoiceSessionControls(
   if (canCompanionShareScreen()) {
     controls.push("look_screen");
   }
-  const visionMode =
-    useClientFeatureFlagStore.getState().stringFlags.visionMode ?? "off";
   if (
-    isVisionModeOn(visionMode) &&
     isVoiceCameraSupported() &&
     (entry === undefined || !ROOMLESS_ENTRIES.has(entry))
   ) {

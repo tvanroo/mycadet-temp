@@ -148,6 +148,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(VoiceLiveActivityPlugin.class);
         registerPlugin(SelfHostedServersPlugin.class);
         registerPlugin(SafePushNotificationsPlugin.class);
+        registerPlugin(LockfilePlugin.class);
         registerPlugin(AndroidSenderNotificationPlugin.class);
         super.load();
     }

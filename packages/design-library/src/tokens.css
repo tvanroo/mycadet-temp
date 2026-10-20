@@ -11,7 +11,6 @@
  * Theme selection is controlled by a `data-theme` attribute on any ancestor
  * element (typically <html> or a wrapper <div>):
  *   <html data-theme="dark">   — dark mode
- *   <html data-theme="velvet"> — velvet mode
  *   (no attribute or "light")  — light mode (default)
  *
  * Source of truth: Figma cCGBcpVDbn22kj3OPU58W8

@@ -38,7 +38,6 @@ import {
 } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite } from "../config/schemas/llm.js";
-import { isSendUserMessageActiveForTurn } from "../config/send-user-message-gate.js";
 import { desktopAutomationLease } from "../desktop/desktop-automation-lease.js";
 import { writeRelationshipState } from "../home/relationship-state-writer.js";
 import type { UserPromptSubmitInputContext } from "../hooks/types.js";
@@ -81,7 +80,6 @@ import {
 import type { ContentBlock, Message } from "../providers/types.js";
 import type { Provider } from "../providers/types.js";
 import { resolveCapabilities } from "../runtime/capabilities.js";
-import { resolveTurnReplyMessageId } from "../runtime/channel-reply-delivery.js";
 import { isNoResponseOnlyText } from "../runtime/no-response.js";
 import { getByConversation as getPendingInteractionsByConversation } from "../runtime/pending-interactions.js";
 import { publishConversationMessagesChanged } from "../runtime/sync/resource-sync-events.js";
@@ -589,15 +587,6 @@ export async function runAgentLoopImpl(
   // surface both scope on the turn's call site.
   ctx.currentCallSite = turnCallSite;
   ctx.currentTurnSkipMemoryRetrieval = options?.skipMemoryRetrieval === true;
-
-  // Whether this turn routes its user-facing text through `send_user_message`:
-  // the flag is on and the turn is a main-agent turn. Resolved once and pinned
-  // on the conversation, because the loop's suppression is fixed for the whole
-  // run: the tool surface, the reserved row's visibility marker, and the
-  // prompt section all read this snapshot instead of the live flag, so a
-  // remote flag change mid-turn cannot contradict what the run is doing.
-  const sendUserMessageActive = isSendUserMessageActiveForTurn(ctx);
-  ctx.currentTurnSendUserMessageActive = sendUserMessageActive;
 
   // Re-resolve the system prompt under the snapshots just set and push it into
   // the loop when the persona changed. The loop reuses the prompt frozen at
@@ -1637,7 +1626,6 @@ export async function runAgentLoopImpl(
           callSite: turnCallSite,
           inferenceCallSite,
           locale: options?.locale,
-          suppressAssistantText: sendUserMessageActive,
           supportsDynamicUi: conversationSupportsDynamicUi(ctx),
           trust: loopTrust,
           overrideProfile: turnOverrideProfile,
@@ -1956,12 +1944,6 @@ export async function runAgentLoopImpl(
         }
       }
       // The row this turn ends on is no longer the one the last successful
-      // call wrote: it is either nothing, or the synthetic error row built
-      // below, and neither carries an assistant-text visibility marker. Drop
-      // the marker along with the id, so the terminal event cannot label a
-      // visible provider error as private working notes and leave clients
-      // rendering it as activity that never produced a reply.
-      state.lastAssistantTextVisibility = undefined;
       if (!state.persistProviderErrorAsAssistantMessage) {
         state.assistantRowAwaitingFinalization = false;
         state.lastAssistantMessageId = undefined;
@@ -2132,21 +2114,7 @@ export async function runAgentLoopImpl(
       });
       publishLoopMessagesChanged();
     } else {
-      // An attachment belongs on the row whose text asked for it. On a turn
-      // that routed its reply through `send_user_message`, the link the model
-      // wrote is inside that tool's message, while the turn's last row is
-      // private wrap-up text: linking there would leave channel delivery
-      // sending the file from a row with no words on it. Resolve the row the
-      // reply actually lives on, the same one the push preview quotes.
-      const attachmentTargetMessageId =
-        state.lastAssistantTextVisibility === "private" &&
-        state.lastAssistantMessageId
-          ? resolveTurnReplyMessageId(
-              ctx.conversationId,
-              userMessageId,
-              state.lastAssistantMessageId,
-            )
-          : state.lastAssistantMessageId;
+      const attachmentTargetMessageId = state.lastAssistantMessageId;
       const computerUseScreenshotCandidate =
         selectFinalComputerUseScreenshotCandidate(state);
       // Resolve attachments (only when not cancelled, this is expensive async I/O)
@@ -2229,11 +2197,6 @@ export async function runAgentLoopImpl(
             : {}),
           ...(state.lastAssistantMessageId
             ? { messageId: state.lastAssistantMessageId }
-            : {}),
-          // The marker the row was stamped with, so the live row gets the same
-          // per-row treatment the history projection will hand it.
-          ...(state.lastAssistantTextVisibility
-            ? { assistantTextVisibility: state.lastAssistantTextVisibility }
             : {}),
         });
         if (shouldEmitQueuedConversationNotices) {

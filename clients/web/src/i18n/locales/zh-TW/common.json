@@ -832,13 +832,6 @@
     "tertiaryText": "第三層文字 - 標題、標籤和預留位置。",
     "userBubble": "使用者在其對話框中的訊息。"
   },
-  "themeToggle": {
-    "dark": "深色",
-    "label": "主題",
-    "light": "淺色",
-    "system": "系統",
-    "velvet": "絲絨"
-  },
   "ttsProviderForm": {
     "apiKey": "API 金鑰",
     "apiKeyRequired": "測試前請為此供應商儲存 API 金鑰。",
@@ -886,10 +879,6 @@
       "email": "我的電子郵件地址已設定但無法運作。你能完成它嗎？",
       "phone": "我的電話號碼已設定但無法運作。你能完成它嗎？"
     }
-  },
-  "useBookmarks": {
-    "addFailed": "加入書籤失敗。",
-    "removeFailed": "移除書籤失敗。"
   },
   "useConnectClaude": {
     "exchangeFailed": "檢查貼上的金鑰，然後再試一次。",
