@@ -36,6 +36,23 @@ type PairingDetails = {
   userCode: string | null;
 };
 
+/**
+ * The device code this page load has already exchanged. The exchange burns
+ * the single-use code, and settling the session afterwards can remount this
+ * page (the route guard revalidates on the session change), so a remount
+ * that still carries the code must resume from the held token rather than
+ * resubmit the code and read the gateway's 401 as an expired pairing.
+ */
+let burnedDeviceCode: string | null = null;
+
+function isBurnedDeviceCode(deviceCode: string | null): boolean {
+  return deviceCode !== null && deviceCode === burnedDeviceCode;
+}
+
+export function __resetBurnedDeviceCodeForTesting(): void {
+  burnedDeviceCode = null;
+}
+
 type PairingState =
   | { kind: "awaiting_code" }
   | { kind: "handoff_choice" }
@@ -255,7 +272,11 @@ export function RemoteWebPairingPage() {
   // If the Cadet app is installed we offer to hand the pairing to it before
   // burning the single-use code, never inside a native shell that pairs directly.
   const appHandoffPlatform = useMemo<AppHandoffPlatform | null>(() => {
-    if (!params.deviceCode || isNativePlatform()) {
+    if (
+      !params.deviceCode ||
+      isBurnedDeviceCode(params.deviceCode) ||
+      isNativePlatform()
+    ) {
       return null;
     }
     if (isAndroidBrowser()) {
@@ -315,7 +336,26 @@ export function RemoteWebPairingPage() {
     const controller = new AbortController();
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
+    const finishApproved = async () => {
+      // The route guard reads the auth store, not the token slot: the boot
+      // probe settled this public page unauthenticated, so the store has to
+      // observe the activated token before `returnTo` is admitted.
+      await useAuthStore.getState().refreshSession();
+      if (controller.signal.aborted) {
+        return;
+      }
+      // Drop the burned device code from the URL before navigating so it
+      // never lingers in the address bar or re-submits on reload.
+      clearDeviceCodeFromUrl();
+      setState({ kind: "approved" });
+      timeout = setTimeout(() => navigate(returnTo, { replace: true }), 250);
+    };
+
     const poll = async () => {
+      if (isBurnedDeviceCode(pairing.deviceCode)) {
+        await finishApproved();
+        return;
+      }
       try {
         const result = await exchangeRemoteWebPairingToken(
           pairing.deviceCode,
@@ -330,19 +370,9 @@ export function RemoteWebPairingPage() {
           return;
         }
 
+        burnedDeviceCode = pairing.deviceCode;
         activateRemoteGatewaySession(result);
-        // The route guard reads the auth store, not the token slot: the boot
-        // probe settled this public page unauthenticated, so the store has to
-        // observe the freshly activated token before `returnTo` is admitted.
-        await useAuthStore.getState().refreshSession();
-        if (controller.signal.aborted) {
-          return;
-        }
-        // Drop the burned device code from the URL before navigating so it
-        // never lingers in the address bar or re-submits on reload.
-        clearDeviceCodeFromUrl();
-        setState({ kind: "approved" });
-        timeout = setTimeout(() => navigate(returnTo, { replace: true }), 250);
+        await finishApproved();
       } catch (err) {
         if (controller.signal.aborted) {
           return;
