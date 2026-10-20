@@ -25,6 +25,7 @@ import {
 import { isNativePlatform } from "@/runtime/native-auth";
 import { isAndroidBrowser, isIOSBrowser } from "@/runtime/platform-detection";
 import { nativeSwitchToOriginPath } from "@/runtime/self-hosted-servers";
+import { useAuthStore } from "@/stores/auth-store";
 import { sanitizeReturnTo } from "@/utils/return-to";
 import { routes } from "@/utils/routes";
 
@@ -330,6 +331,13 @@ export function RemoteWebPairingPage() {
         }
 
         activateRemoteGatewaySession(result);
+        // The route guard reads the auth store, not the token slot: the boot
+        // probe settled this public page unauthenticated, so the store has to
+        // observe the freshly activated token before `returnTo` is admitted.
+        await useAuthStore.getState().refreshSession();
+        if (controller.signal.aborted) {
+          return;
+        }
         // Drop the burned device code from the URL before navigating so it
         // never lingers in the address bar or re-submits on reload.
         clearDeviceCodeFromUrl();
