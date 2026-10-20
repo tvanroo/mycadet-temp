@@ -81,6 +81,13 @@ const exchangeRemoteWebPairingTokenMock = mock(
   }),
 );
 const activateRemoteGatewaySessionMock = mock((_session: unknown) => {});
+const refreshSessionMock = mock(async () => true);
+
+mock.module("@/stores/auth-store", () => ({
+  useAuthStore: {
+    getState: () => ({ refreshSession: refreshSessionMock }),
+  },
+}));
 
 const APPROVED_RESULT: RemoteWebPairingTokenResult = {
   status: "approved",
@@ -132,6 +139,7 @@ afterEach(() => {
   setUserAgent(ORIGINAL_USER_AGENT);
   exchangeRemoteWebPairingTokenMock.mockClear();
   activateRemoteGatewaySessionMock.mockClear();
+  refreshSessionMock.mockClear();
   nativeSwitchToOriginPathMock.mockReset();
   nativeSwitchToOriginPathMock.mockImplementation(async () => false);
 });
@@ -393,6 +401,9 @@ describe("RemoteWebPairingPage", () => {
 
     expect(await screen.findByText("Connected")).not.toBeNull();
     expect(activateRemoteGatewaySessionMock).toHaveBeenCalledTimes(1);
+    // The route guard admits `returnTo` from the auth store, so the store
+    // observes the activated token before the page reports success.
+    expect(refreshSessionMock).toHaveBeenCalledTimes(1);
     // The pre-approved arrival never shows the approval-code / waiting UI.
     expect(screen.queryByText("Waiting for approval")).toBeNull();
     expect(screen.queryByText("Pairing code")).toBeNull();
