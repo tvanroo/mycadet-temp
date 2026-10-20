@@ -126,11 +126,12 @@ mock.module("@/lib/auth/remote-gateway-session", () => ({
   RemoteWebPairingError: MockRemoteWebPairingError,
 }));
 
-const { RemoteWebPairingPage } =
+const { RemoteWebPairingPage, __resetBurnedDeviceCodeForTesting } =
   await import("@/domains/remote-web/pairing-page");
 
 afterEach(() => {
   cleanup();
+  __resetBurnedDeviceCodeForTesting();
   cloudRemote = false;
   injectedAssistantName = undefined;
   injectedHubUrl = undefined;
@@ -408,6 +409,37 @@ describe("RemoteWebPairingPage", () => {
     expect(screen.queryByText("Waiting for approval")).toBeNull();
     expect(screen.queryByText("Pairing code")).toBeNull();
     expect(screen.queryByText("WXYZ-1234")).toBeNull();
+  });
+
+  test("a remount carrying an already-exchanged code resumes from the held token instead of resubmitting it", async () => {
+    exchangeRemoteWebPairingTokenMock.mockImplementationOnce(
+      async () => APPROVED_RESULT,
+    );
+    const entries = ["/assistant/pair?deviceCode=remount-code&userCode=WXYZ"];
+
+    render(
+      <MemoryRouter initialEntries={entries}>
+        <RemoteWebPairingPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Connected")).not.toBeNull();
+    expect(exchangeRemoteWebPairingTokenMock).toHaveBeenCalledTimes(1);
+
+    // Settling the session can revalidate the route and remount this page
+    // on the same URL. The gateway would answer a resubmitted code with 401,
+    // which the page reads as an expired pairing.
+    cleanup();
+    render(
+      <MemoryRouter initialEntries={entries}>
+        <RemoteWebPairingPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Connected")).not.toBeNull();
+    expect(exchangeRemoteWebPairingTokenMock).toHaveBeenCalledTimes(1);
+    expect(activateRemoteGatewaySessionMock).toHaveBeenCalledTimes(1);
+    expect(refreshSessionMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Pairing expired")).toBeNull();
   });
 
   test("still shows the waiting state and code when the code is not yet approved", async () => {
