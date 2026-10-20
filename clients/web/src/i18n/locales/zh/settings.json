@@ -317,15 +317,6 @@
     "title": "安全",
     "useForSignIn": "使用 {label} 登录"
   },
-  "bookmarksPage": {
-    "emptyDescription": "将鼠标悬停在任意消息上，然后点击书签图标即可将其保存到此处。",
-    "emptyTitle": "无书签",
-    "errorDescription": "发生错误。请重试。",
-    "errorTitle": "加载书签失败",
-    "open": "打开",
-    "removeBookmark": "移除书签",
-    "retry": "重试"
-  },
   "bulkOverrideSwapModal": {
     "affectedSummary": "{count, plural, other {# 个操作当前使用 {profile}}}",
     "applyTo": "{count, plural, other {应用于 # 个操作}}",
@@ -693,8 +684,6 @@
     "current": "当前",
     "customize": "自定义",
     "dangerZoneTitle": "危险区域",
-    "handleSubtitle": "为该页面提供服务的助手。",
-    "handleTitle": "助手标识",
     "preferencesSubtitle": "自定义 Cadet 在此设备上的外观和行为。",
     "preferencesTitle": "偏好设置",
     "retireAssistantDescription": "永久停用此助手并删除所有相关数据。",
@@ -1631,8 +1620,7 @@
     "dark": "深色",
     "light": "浅色",
     "system": "系统",
-    "title": "主题",
-    "velvet": "丝绒"
+    "title": "主题"
   },
   "tierPicker": {
     "machineAriaLabel": "机器层级",
@@ -2004,38 +1992,6 @@
     "redirectUrl": "重定向 URL",
     "waitingAuthorization": "等待授权..."
   },
-  "personalityPage": {
-    "axes": {
-      "companionCoworker": {
-        "left": "伙伴",
-        "right": "同事"
-      },
-      "executeCollaborate": {
-        "left": "独立",
-        "right": "协作"
-      },
-      "genzBoomer": {
-        "left": "Z世代",
-        "right": "婴儿潮一代"
-      },
-      "playfulSerious": {
-        "left": "活泼",
-        "right": "严肃"
-      },
-      "politeUnfiltered": {
-        "left": "礼貌",
-        "right": "直率"
-      }
-    },
-    "loadError": "无法加载个性滑块。",
-    "rangeAriaLabel": "{left} 到 {right}",
-    "save": "保存",
-    "saveErrorToast": "无法保存个性滑块。请重试。",
-    "saveSuccessToast": "个性滑块已保存。",
-    "saving": "正在保存…",
-    "subtitle": "将这些滑块值保存到此助手。这不会改写身份文件。",
-    "title": "个性"
-  },
   "sidebar": {
     "general": "常规",
     "model": "模型与服务",
@@ -2045,12 +2001,10 @@
     "voice": "语音",
     "sounds": "声音",
     "privacy": "权限与隐私",
-    "bookmarks": "书签",
     "usage": "用量",
     "billingUsage": "账单与用量",
     "community": "社区",
     "debug": "调试",
-    "personality": "个性",
     "logout": "退出登录",
     "login": "登录",
     "title": "设置"

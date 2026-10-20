@@ -231,14 +231,10 @@ describe("stampThinkingTiming", () => {
 });
 
 /**
- * The `chat-credential-reveal` gate lives one layer up in
- * `chatRevealCandidates`, which yields `undefined` when the flag is off — so
- * `revealCandidates: undefined` here is the flag-off persist path, and the
- * default configuration. Redaction is not what the flag selects: a
- * route-proven reveal plaintext must stay out of the persisted row in both
- * modes, via the flag-independent `legacyFallbackCandidates` seam.
+ * Redaction is unconditional: a route-proven reveal plaintext must stay out
+ * of the persisted row, via the `legacyFallbackCandidates` seam.
  */
-describe("buildPersistedAssistantContent — legacy (flag-off) redaction", () => {
+describe("buildPersistedAssistantContent — persisted-text redaction", () => {
   const openaiCandidate: ResolvedRevealCandidate = {
     service: "openai",
     field: "api_key",
@@ -252,14 +248,12 @@ describe("buildPersistedAssistantContent — legacy (flag-off) redaction", () =>
 
   function persistText(
     text: string,
-    revealCandidates?: readonly ResolvedRevealCandidate[],
     legacyFallbackCandidates: readonly ResolvedRevealCandidate[] = [],
   ): string {
     const built = buildPersistedAssistantContent(
       [{ type: "text", text }] as unknown as ContentBlock[],
       [],
       undefined,
-      revealCandidates,
       legacyFallbackCandidates,
     ) as unknown as Array<Record<string, unknown>>;
     return built[0].text as string;
@@ -276,11 +270,9 @@ describe("buildPersistedAssistantContent — legacy (flag-off) redaction", () =>
   test("redacts a proven candidate the scanner cannot classify", () => {
     // The opaque value has no scanner-recognizable shape, so the fallback is
     // the only thing standing between it and a raw persisted row.
-    const out = persistText(
-      `token: ${SYNTHETIC_OPAQUE_CREDENTIAL}`,
-      undefined,
-      [opaqueCandidate],
-    );
+    const out = persistText(`token: ${SYNTHETIC_OPAQUE_CREDENTIAL}`, [
+      opaqueCandidate,
+    ]);
 
     expect(out).not.toContain(SYNTHETIC_OPAQUE_CREDENTIAL);
     expect(out).toContain("<redacted");
@@ -298,23 +290,13 @@ describe("buildPersistedAssistantContent — legacy (flag-off) redaction", () =>
     expect(built[0]._redactionVersion).toBe(2);
   });
 
-  test("sentinel mode enriches the same candidate the legacy path flattens", () => {
-    // Candidate spans are protected ahead of the scanner in both modes, so the
-    // legacy marker reports the generic type while the sentinel carries the
-    // vault identity the chip needs.
-    const legacy = persistText(
-      `key: ${SYNTHETIC_OPENAI_PROJECT_KEY}`,
-      undefined,
-      [openaiCandidate],
-    );
-    const sentinel = persistText(`key: ${SYNTHETIC_OPENAI_PROJECT_KEY}`, [
+  test("a proven candidate the scanner CAN classify flattens to the generic marker", () => {
+    // The legacy marker never carries a vault identity — no chips.
+    const out = persistText(`key: ${SYNTHETIC_OPENAI_PROJECT_KEY}`, [
       openaiCandidate,
     ]);
 
-    expect(legacy).toBe('key: <redacted type="Credential" />');
-    expect(sentinel).toBe(
-      "key: 〔redacted:OpenAI Project Key:openai:api_key〕",
-    );
+    expect(out).toBe('key: <redacted type="Credential" />');
   });
 });
 
@@ -323,127 +305,3 @@ describe("buildPersistedAssistantContent — legacy (flag-off) redaction", () =>
  * persist time like any other. Redacting only on the read-side projection
  * would leave the secret in SQLite and in every reader that walks the raw row.
  */
-describe("buildPersistedAssistantContent: tool-delivered text", () => {
-  const openaiCandidate: ResolvedRevealCandidate = {
-    service: "openai",
-    field: "api_key",
-    value: SYNTHETIC_OPENAI_PROJECT_KEY,
-  };
-
-  function deliverMessage(
-    message: string,
-    revealCandidates?: readonly ResolvedRevealCandidate[],
-    legacyFallbackCandidates: readonly ResolvedRevealCandidate[] = [],
-  ): Record<string, unknown> {
-    const built = buildPersistedAssistantContent(
-      [
-        { type: "text", text: "handing them the key" },
-        {
-          type: "tool_use",
-          id: "tu_1",
-          name: "send_user_message",
-          input: { message },
-        },
-      ] as unknown as ContentBlock[],
-      [],
-      undefined,
-      revealCandidates,
-      legacyFallbackCandidates,
-    ) as unknown as Array<Record<string, unknown>>;
-    return built[1];
-  }
-
-  test("a scanner-matched secret never reaches the persisted row", () => {
-    const block = deliverMessage(`Here it is: ${SYNTHETIC_OPENAI_PROJECT_KEY}`);
-    const input = block.input as Record<string, unknown>;
-
-    expect(input.message).toBe(
-      `Here it is: ${OPENAI_PROJECT_KEY_REDACTION_MARKER}`,
-    );
-    expect(JSON.stringify(block)).not.toContain(SYNTHETIC_OPENAI_PROJECT_KEY);
-    // Marked neutralization-aware, so the text block the projection derives
-    // from it keeps its redactor-authored marker at read.
-    expect(block._redactionVersion).toBe(2);
-  });
-
-  test("a proven candidate the scanner cannot classify is redacted too", () => {
-    const block = deliverMessage(
-      `token: ${SYNTHETIC_OPAQUE_CREDENTIAL}`,
-      undefined,
-      [{ service: "acme", field: "token", value: SYNTHETIC_OPAQUE_CREDENTIAL }],
-    );
-
-    expect(block.input as Record<string, unknown>).toMatchObject({
-      message: 'token: <redacted type="Credential" />',
-    });
-  });
-
-  test("sentinel mode carries the vault identity the chip needs", () => {
-    const block = deliverMessage(`key: ${SYNTHETIC_OPENAI_PROJECT_KEY}`, [
-      openaiCandidate,
-    ]);
-
-    expect((block.input as Record<string, unknown>).message).toBe(
-      "key: 〔redacted:OpenAI Project Key:openai:api_key〕",
-    );
-  });
-
-  test("a message with nothing to redact is left exactly as it was", () => {
-    const block = deliverMessage("You have two meetings today.");
-
-    expect(block.input).toEqual({ message: "You have two meetings today." });
-    // Untouched means untouched: no rider on a block that was never rewritten.
-    expect(block._redactionVersion).toBeUndefined();
-  });
-});
-
-/**
- * A legacy `<cadet-attachment />` directive inside a delivered message.
- *
- * `cleanAssistantContent` visits top-level text blocks, so a tag the model put
- * inside `send_user_message.message` survived into the persisted row and the
- * projection then rendered it to the user verbatim. Discovery of the directive
- * is separate (it runs over the projected blocks), so this is about the markup
- * reaching the transcript.
- */
-describe("buildPersistedAssistantContent: directives in a delivered message", () => {
-  function deliver(message: string): Record<string, unknown> {
-    const built = buildPersistedAssistantContent(
-      [
-        {
-          type: "tool_use",
-          id: "tu_1",
-          name: "send_user_message",
-          input: { message },
-        },
-      ] as unknown as ContentBlock[],
-      [],
-    ) as unknown as Array<Record<string, unknown>>;
-    return built[0];
-  }
-
-  test("strips the legacy tag from what the row persists", () => {
-    const block = deliver(
-      'Here is the file:\n<cadet-attachment path="out.png" />',
-    );
-    const message = (block.input as Record<string, unknown>).message as string;
-
-    expect(message).not.toContain("<cadet-attachment");
-    expect(message).toContain("Here is the file:");
-  });
-
-  test("leaves a message with no directive exactly as it was", () => {
-    const block = deliver("You have two meetings today.");
-
-    expect(block.input).toEqual({ message: "You have two meetings today." });
-  });
-
-  test("a cadet:// link survives, since those stay in the text", () => {
-    // Link directives are non-destructive: the file is attached AND the link
-    // stays so the user can see what it points at.
-    const block = deliver("[report.pdf](cadet://workspace/report.pdf)");
-    const input = block.input as Record<string, unknown>;
-
-    expect(input.message).toBe("[report.pdf](cadet://workspace/report.pdf)");
-  });
-});

@@ -7,9 +7,9 @@ import WebKit
 /// 1. Registers `NativeAuthPlugin`, `NativeBiometricPlugin`,
 ///    `VoiceAudioSessionPlugin`, `VoiceLiveActivityPlugin`,
 ///    `ApnsEnvironmentPlugin`, `SelfHostedServersPlugin`,
-///    `RecentChatsPlugin`, `WidgetSnapshotPlugin`, `AppIconPlugin`, and
-///    `ShareInboxPlugin`, and `SenderNotificationPlugin` as local plugin
-///    instances at bridge init time.
+///    `RecentChatsPlugin`, `WidgetSnapshotPlugin`, `AppIconPlugin`,
+///    `LockfilePlugin`, `ShareInboxPlugin`, and `SenderNotificationPlugin`
+///    as local plugin instances at bridge init time.
 ///    These plugins live inside the App target (no SPM module) so the bridge
 ///    won't discover them automatically.
 ///
@@ -207,6 +207,7 @@ class MyViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AppIconPlugin())
         bridge?.registerPluginInstance(ShareInboxPlugin())
         bridge?.registerPluginInstance(SenderNotificationPlugin())
+        bridge?.registerPluginInstance(LockfilePlugin())
         installNavigationDelegateProxy()
         installInputZoomPreventionUserScript()
         installViewportZoomLockUserScript()

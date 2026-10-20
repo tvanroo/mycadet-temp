@@ -84,7 +84,6 @@ import {
 } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite } from "../config/schemas/llm.js";
-import { isSidebarDoneEnabled } from "../config/sidebar-done-gate.js";
 import { conversationSupportsDynamicUi } from "../daemon/channel-ui-capability.js";
 import type { Conversation } from "../daemon/conversation.js";
 import type { QueueDrainReason } from "../daemon/conversation-queue-manager.js";
@@ -516,7 +515,7 @@ export interface WakeDeps {
   /**
    * Resolve the live {@link Conversation} for a wake invocation.
    * Returns `null` if the conversation doesn't exist, `"archived"` if it
-   * exists but is archived and the `sidebar-done` gate is off, or the
+   * exists but is archived, or the
    * `Conversation` to proceed with the wake.
    *
    * Receives the full {@link WakeOptions} so the default resolver can
@@ -557,12 +556,9 @@ async function defaultResolveTarget(
     if (!existing) {
       return null;
     }
-    // Under the `sidebar-done` gate an archived conversation is one the user
-    // marked Done, not one they half-deleted: its schedules, channel threads
-    // and background tools keep working, and the first message the wake
-    // produces for the user brings the conversation back to the list
-    // (`resurfaceArchivedConversation`).
-    if (existing.archivedAt != null && !isSidebarDoneEnabled()) {
+    // An archived conversation rejects every wake; only unarchiving makes it
+    // wakeable again.
+    if (existing.archivedAt != null) {
       log.info(
         { conversationId },
         "agent-wake: conversation is archived; rejecting wake",
@@ -716,9 +712,6 @@ function inspectWakeOutput(
   // — we must persist the entire tail so the DB mirrors in-memory
   // history.
   //
-  // Plain text is the whole signal here: a wake never routes its reply through
-  // `send_user_message` (the tool is off for direct wakes, see the turn-snapshot
-  // pin below), so its assistant text is what the user reads.
   let hasVisibleText = false;
   const toolUseNames: string[] = [];
   for (const msg of tailMessages) {
@@ -1634,19 +1627,8 @@ export async function wakeAgentForOpportunity(
       const priorTurnIsNonInteractive =
         conversation.currentTurnIsNonInteractive;
       const priorTurnTrust = conversation.currentTurnTrustContext;
-      const priorSendUserMessageActive =
-        conversation.currentTurnSendUserMessageActive;
       conversation.currentCallSite = callSite;
       conversation.currentTurnOverrideProfile = overrideProfile;
-      // A wake drives the loop directly rather than through
-      // `runAgentLoopImpl`, so it neither suppresses streamed assistant text
-      // nor stamps a visibility marker on the rows it persists itself. Offering
-      // `send_user_message` here would hand the model a delivery tool whose
-      // message nothing emits, so the wake would end holding a tool chip and no
-      // words. Pinning the turn snapshot false keeps the tool off every direct
-      // wake (scheduled, heartbeat, background-tool, retrospective forks) and
-      // leaves the wake's plain text as its reply, exactly as today.
-      conversation.currentTurnSendUserMessageActive = false;
       // Same reason as the stamps above: a wake triggered by a schedule firing
       // delegates work to subagents whose usage must attribute to that firing.
       conversation.currentTurnCronRunId = opts.cronRunId ?? null;
@@ -1756,8 +1738,6 @@ export async function wakeAgentForOpportunity(
         conversation.currentTurnCronRunId = priorTurnCronRunId;
         conversation.currentTurnIsNonInteractive = priorTurnIsNonInteractive;
         conversation.currentTurnTrustContext = priorTurnTrust;
-        conversation.currentTurnSendUserMessageActive =
-          priorSendUserMessageActive;
         // The prompt is part of what the wake stamped, so restore it with the
         // rest rather than leaving the loop holding a wake-scoped prompt for
         // whatever runs next.

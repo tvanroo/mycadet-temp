@@ -93,18 +93,29 @@
     "cancel": "Cancelar",
     "logIn": "Iniciar sesión"
   },
+  "selectAssistantScreen": {
+    "listAriaLabel": "Asistentes",
+    "create": "Crear un asistente",
+    "rowActionsAriaLabel": "Acciones de {name}",
+    "retire": "Retirar asistente"
+  },
   "appShell": {
     "loading": "Cargando asistente…",
     "error": "No se pudo cargar el asistente.",
+    "errorTitle": "No pudimos comunicarnos con tu asistente",
+    "errorBody": "No respondió en este momento. Si tu asistente acaba de iniciarse, dale un momento y vuelve a intentarlo.",
     "notReady": "Tu asistente no está listo.",
     "notReadyTitle": "Tu asistente no está listo.",
     "notReadyBody": "No está disponible en este momento. Inténtalo de nuevo en un rato o actívalo desde tu cuenta de Cadet.",
+    "wake": "Despiértalo",
+    "waking": "Despertando…",
+    "wakeFailed": "El despertar no funcionó en este momento. Inténtalo de nuevo en un rato.",
     "empty": "No hay ningún asistente disponible.",
     "unauthenticated": "Inicia sesión para continuar.",
     "retry": "Reintentar",
+    "switchAssistant": "Cambiar de asistente",
     "title": "Asistente",
     "selection": "Elige un asistente.",
-    "unavailable": "Este asistente no está disponible.",
-    "chooseAnother": "Elegir otro asistente"
+    "unavailable": "Este asistente no está disponible."
   }
 }

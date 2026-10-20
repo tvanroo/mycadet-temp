@@ -119,58 +119,6 @@ describe("AgentLoop: unparseable tool retries", () => {
     );
   });
 
-  test("surfaces only the stop notice when assistant text is tool-gated", async () => {
-    const raw = "{" + "x".repeat(1_000);
-    const { provider } = createMockProvider([
-      malformedToolResponse("bad-1", raw, { text: "Private notes one." }),
-      malformedToolResponse("bad-2", raw, { text: "Private notes two." }),
-      malformedToolResponse("bad-3", raw, { text: "Private notes three." }),
-    ]);
-    const events: AgentEvent[] = [];
-    const loop = new AgentLoop({
-      provider,
-      systemPrompt: "system",
-      conversationId: "conversation-gated",
-      tools: [
-        {
-          name: "file_write",
-          description: "",
-          input_schema: { type: "object" },
-        },
-      ],
-      toolExecutor: async () => ({ content: "invalid JSON", isError: true }),
-    });
-
-    const result = await loop.run({
-      requestId: "request-gated",
-      messages: [userMessage],
-      onEvent: (event) => {
-        events.push(event);
-      },
-      trust: { sourceChannel: "cadet", trustClass: "unknown" },
-      suppressAssistantText: true,
-    });
-
-    expect(result.history.at(-1)?.content).toEqual([
-      {
-        type: "text",
-        text: MESSAGE_KEYS.AGENT_LOOP_UNPARSEABLE_TOOL_RETRY_STOP,
-      },
-    ]);
-    expect(
-      events
-        .filter((event) => event.type === "text_delta")
-        .map((event) => event.text)
-        .join(""),
-    ).toBe(
-      MESSAGE_CATALOGS.en[MESSAGE_KEYS.AGENT_LOOP_UNPARSEABLE_TOOL_RETRY_STOP],
-    );
-    const finalMessage = events
-      .filter((event) => event.type === "message_complete")
-      .at(-1);
-    expect(finalMessage?.assistantTextVisibility).toBe("visible");
-  });
-
   test("streams the localized stop notice while persisting its key", async () => {
     const raw = "{" + "x".repeat(1_000);
     const { provider } = createMockProvider([

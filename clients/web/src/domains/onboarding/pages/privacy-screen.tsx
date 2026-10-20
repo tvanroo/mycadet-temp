@@ -17,11 +17,9 @@ import {
 } from "@/domains/onboarding/onboarding-destination";
 import { SETUP_NAVIGATE } from "@/domains/onboarding/onboarding-navigation";
 import { ATTRIBUTED_PLUGIN_PARAM } from "@/domains/onboarding/plugin-attribution";
-import { useMarketingPricingTakeover } from "@/hooks/use-marketing-pricing-takeover";
 import { CHECKOUT_CONTINUE_PARAM } from "@/lib/billing/checkout-continuation";
 import type { CheckoutIntent } from "@/lib/billing/checkout-intent";
 import {
-  clearCheckoutIntent,
   readCheckoutIntent,
 } from "@/lib/billing/checkout-intent";
 import { buildCustomCheckoutSearch } from "@/lib/billing/custom-checkout-params";
@@ -56,7 +54,6 @@ export function PrivacyScreen() {
   const [tosAccepted, setTosAcceptedReal] = useTosAccepted();
   const [privacyConsent, setPrivacyConsentReal] = usePrivacyConsent();
   const hasCloudSession = useHasCloudSession();
-  const takeover = useMarketingPricingTakeover();
 
   const isPreview = searchParams.get("preview") === "true";
   const noop = useCallback((_next: boolean) => {}, []);
@@ -154,26 +151,16 @@ export function PrivacyScreen() {
       // this screen just hands off. Resuming only from this explicit click
       // (Start or Skip to chat), never a render effect, keeps consent and
       // checkout from looping.
-      // A positively-off `marketing-pricing-takeover` drops the dead selection and
-      // continues onboarding: handing off would bounce through a gated checkout
-      // route and out of the funnel before research runs. An unresolved flag still
-      // resumes, carrying the onboarding step this click would otherwise have
-      // taken: if the flag lands off, checkout returns the user there instead of
-      // the plans takeover, so a pending→disabled race stays inside the funnel.
       const checkoutIntent = readCheckoutIntent();
       if (checkoutIntent?.resumeAfterOnboarding === true) {
-        if (takeover === "disabled") {
-          clearCheckoutIntent();
-        } else {
-          const checkoutParams = checkoutResumeSearch(checkoutIntent);
-          if (checkoutParams) {
-            checkoutParams.set(CHECKOUT_CONTINUE_PARAM, onboardingNext);
-            void navigate(
-              `${routes.checkout}?${checkoutParams.toString()}`,
-              SETUP_NAVIGATE,
-            );
-            return;
-          }
+        const checkoutParams = checkoutResumeSearch(checkoutIntent);
+        if (checkoutParams) {
+          checkoutParams.set(CHECKOUT_CONTINUE_PARAM, onboardingNext);
+          void navigate(
+            `${routes.checkout}?${checkoutParams.toString()}`,
+            SETUP_NAVIGATE,
+          );
+          return;
         }
       }
 
@@ -186,7 +173,6 @@ export function PrivacyScreen() {
       navigate,
       searchParams,
       shareDiagnosticsChecked,
-      takeover,
       tosAccepted,
       userId,
     ],

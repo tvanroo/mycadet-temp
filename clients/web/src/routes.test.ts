@@ -239,21 +239,6 @@ describe("app viewer route", () => {
     expect(isUnderComponent(appPath, "ChatLayoutRoute")).toBe(true);
   });
 
-  // The sibling `inspect` sub-route is lazy and gated, and nothing else
-  // asserts that asymmetry: adding the app segment must not move it.
-  test("leaves the sibling inspect route on InspectPage behind the gate", async () => {
-    const inspectPath = "/assistant/conversations/c1/inspect";
-    const matches = matchRoutes(routeTree as never, inspectPath) ?? [];
-    const leaf = matches.at(-1)?.route as
-      | { lazy?: { Component: () => Promise<unknown> } }
-      | undefined;
-
-    expect(matches.at(-1)?.pathname).toBe(inspectPath);
-    expect(await leaf?.lazy?.Component()).toBe(
-      (await import("@/domains/chat/inspector/inspect-page")).InspectPage,
-    );
-    expect(isUnderComponent(inspectPath, "ActiveAssistantGate")).toBe(true);
-  });
 });
 
 describe("skills routes", () => {
@@ -275,68 +260,6 @@ describe("skills routes", () => {
     const matches = matchRoutes(routeTree as never, url) ?? [];
     expect(matches.length).toBeGreaterThan(0);
     expect(matches.at(-1)?.params.skillId).toBe("org/repo/shared-skill");
-  });
-});
-
-describe("All chats route", () => {
-  // The page is reachable by URL only while the flag is off everywhere else,
-  // so the failure this guards is the path falling through to the
-  // `/assistant/*` catch-all and answering not-found instead of the redirect
-  // the route itself owns.
-  test("matches a route of its own inside the auth-protected app tree", async () => {
-    const { routes } = await import("@/utils/routes");
-    const matches = matchRoutes(routeTree as never, routes.allChats) ?? [];
-
-    expect(matches.length).toBeGreaterThan(0);
-    expect(matches.at(-1)?.pathname).toBe(routes.allChats);
-    expect(matches.at(-1)?.params["*"]).toBeUndefined();
-    expect(hasRouteMiddleware(routes.allChats)).toBe(true);
-  });
-
-  test("resolves the page behind the active-assistant gate, with the sidebar", async () => {
-    const { routes } = await import("@/utils/routes");
-    const matches = matchRoutes(routeTree as never, routes.allChats) ?? [];
-    const leaf = matches.at(-1)?.route as
-      | { lazy?: { Component: () => Promise<unknown> } }
-      | undefined;
-
-    expect(await leaf?.lazy?.Component()).toBe(
-      (await import("@/domains/chat/pages/all-chats-page-route"))
-        .AllChatsPageRoute,
-    );
-    expect(isUnderComponent(routes.allChats, "ActiveAssistantGate")).toBe(true);
-    expect(isUnderComponent(routes.allChats, "ChatLayoutRoute")).toBe(true);
-  });
-
-  // The preselect links the sidebar section headers carry are the same path
-  // with a query string; a match that consumed the params would mean the page
-  // never sees them.
-  test("matches with a preselected filter in the query string", async () => {
-    const { routes } = await import("@/utils/routes");
-    const { allChatsSearchFor } =
-      await import("@/domains/chat/utils/all-chats-filters");
-    const url = `${routes.allChats}${allChatsSearchFor({
-      kind: "channel",
-      channelId: "slack",
-    })}`;
-
-    expect(url).toBe("/assistant/chats?channel=slack");
-    const matches = matchRoutes(routeTree as never, url) ?? [];
-    expect(matches.at(-1)?.pathname).toBe(routes.allChats);
-  });
-});
-
-describe("billing settings route", () => {
-  // A platform probe that reports after the auth guard's wait timed out
-  // corrects its forced decision by revalidating the router, and revalidation
-  // only re-runs the guard for paths whose matched chain carries route
-  // middleware. Billing is where a paid checkout return lands.
-  test("matches inside the auth-protected app tree", () => {
-    const path = "/assistant/settings/billing";
-    const matches = matchRoutes(routeTree as never, path) ?? [];
-    expect(matches.length).toBeGreaterThan(0);
-    expect(matches.at(-1)?.pathname).toBe(path);
-    expect(hasRouteMiddleware(path)).toBe(true);
   });
 });
 

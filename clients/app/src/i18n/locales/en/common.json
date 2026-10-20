@@ -848,8 +848,7 @@
     "dark": "Dark",
     "label": "Theme",
     "light": "Light",
-    "system": "System",
-    "velvet": "Velvet"
+    "system": "System"
   },
   "ttsProviderForm": {
     "apiKey": "API Key",

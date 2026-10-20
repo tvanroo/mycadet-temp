@@ -11,6 +11,7 @@ import {
   mkdirSync,
 } from "fs";
 import { join, dirname } from "path";
+import { cliCommand } from "./cli-name.js";
 
 import { getLockfilePlatformBaseUrl } from "./assistant-config.js";
 import { getConfigDir, getConfigDirs } from "./environments/paths.js";
@@ -203,7 +204,7 @@ export async function authHeaders(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("401") || msg.includes("403")) {
-      throw new Error("Authentication failed. Run 'cadet login' to refresh.");
+      throw new Error(`Authentication failed. Run '${cliCommand()} login' to refresh.`);
     }
     throw new Error(`Failed to fetch organization: ${msg}`);
   }

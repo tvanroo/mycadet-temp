@@ -72,9 +72,6 @@
   "assistantEmailIntroModal": {
     "setUp": "设置邮箱"
   },
-  "assistantFeatureFlagStore": {
-    "updateFailed": "无法更新“{label}”。您的更改已恢复。"
-  },
   "avatarManagementModal": {
     "accent": "强调色",
     "accentAutomatic": "自动",
@@ -832,13 +829,6 @@
     "tertiaryText": "三级文本 - 字幕、标签和占位符。",
     "userBubble": "用户在其气泡中的消息。"
   },
-  "themeToggle": {
-    "dark": "深色",
-    "label": "主题",
-    "light": "浅色",
-    "system": "系统",
-    "velvet": "丝绒"
-  },
   "ttsProviderForm": {
     "apiKey": "API 密钥",
     "apiKeyRequired": "测试前请为此提供商保存 API 密钥。",
@@ -886,10 +876,6 @@
       "email": "我的电子邮件地址已设置但无法工作。你能完成它吗？",
       "phone": "我的电话号码已设置但无法工作。你能完成它吗？"
     }
-  },
-  "useBookmarks": {
-    "addFailed": "收藏消息失败。",
-    "removeFailed": "移除收藏失败。"
   },
   "useConnectClaude": {
     "exchangeFailed": "请检查粘贴的密钥并重试。",

@@ -4,7 +4,6 @@ import { useNavigate } from "react-router";
 import { useAssistantInboxState } from "@/domains/assistant-inbox/hooks/use-assistant-inbox-state";
 import { useFeatureIntroSeen } from "@/hooks/use-feature-intro-seen";
 import { useAssistantIdentityStore } from "@/stores/assistant-identity-store";
-import { useInChatOnboardingStore } from "@/stores/in-chat-onboarding-store";
 import { useOnboardingFocusStore } from "@/stores/onboarding-focus-store";
 import { useResolvedAssistantsStore } from "@/stores/resolved-assistants-store";
 import { routes } from "@/utils/routes";
@@ -26,13 +25,12 @@ function AssistantEmailIntroGate({ assistantId, markSeen }: GateProps) {
   const navigate = useNavigate();
   const focused = useOnboardingFocusStore.use.focused();
   const checkinPending = useOnboardingFocusStore.use.checkinPending();
-  const tourActive = useInChatOnboardingStore.use.prototypeActive();
   const identityName = useAssistantIdentityStore.use.name();
   const state = useAssistantInboxState(assistantId, identityName ?? "");
 
   const intro = resolveAssistantEmailIntro({
     seen: false,
-    onboardingBusy: focused || checkinPending || tourActive,
+    onboardingBusy: focused || checkinPending,
     assistantCreatedAt: state.createdAt,
     status: state.status,
   });

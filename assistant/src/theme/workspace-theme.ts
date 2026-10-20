@@ -1,7 +1,7 @@
 /**
  * Workspace theme: user- or assistant-authored design-token overrides read
  * from `ui/theme.json` in the workspace. Clients apply the validated tokens
- * on top of the built-in themes (light/dark/velvet).
+ * on top of the built-in themes (light/dark).
  *
  * Security posture is a strict whitelist:
  * - only the semantic token slots below are accepted (unknown keys reject),
@@ -63,7 +63,7 @@ export type WorkspaceThemeTokens = z.infer<typeof ThemeTokensSchema>;
 export const WorkspaceThemeSchema = z
   .object({
     version: z.literal(1),
-    base: z.enum(["light", "dark", "velvet", "system"]).optional(),
+    base: z.enum(["light", "dark", "system"]).optional(),
     tokens: ThemeTokensSchema.optional(),
   })
   .strict();

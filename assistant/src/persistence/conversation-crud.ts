@@ -32,7 +32,6 @@ import type { ChannelId, InterfaceId } from "../channels/types.js";
 import { parseChannelId, parseInterfaceId } from "../channels/types.js";
 import { CHANNEL_IDS, isChannelId } from "../channels/types.js";
 import { getConfig } from "../config/loader.js";
-import { isSidebarDoneEnabled } from "../config/sidebar-done-gate.js";
 import { findDisplayTurnEndIndex } from "../conversations/message-consolidation.js";
 import { findConversation } from "../daemon/conversation-registry.js";
 import { conversationMetadataSyncTag } from "../daemon/message-types/sync.js";
@@ -49,7 +48,6 @@ import { indexMessageNow } from "../plugins/defaults/memory/indexer.js";
 import { runHook } from "../plugins/pipeline.js";
 import type { ContentBlock } from "../providers/types.js";
 import { getCurrentSeq } from "../runtime/assistant-stream-state.js";
-import { publishConversationListAndMetadataChanged } from "../runtime/sync/resource-sync-events.js";
 import { publishSyncInvalidation } from "../runtime/sync/sync-publisher.js";
 import { UserError } from "../util/errors.js";
 import { getConversationsDir } from "../util/layout.js";
@@ -102,7 +100,6 @@ import {
   computerUseScreenshotAttachmentIdsFromMetadata,
   type ConversationCreateType,
   type ConversationOrigin,
-  isEchoSuppressedUserMessage,
   isHiddenMessageMetadata,
   isNoResponseMetadata,
   isReactionMessageMetadata,
@@ -451,17 +448,6 @@ export const messageMetadataSchema = z
      * future kinds never fail metadata validation.
      */
     messageKind: z.string().optional(),
-    /**
-     * How a role-`"assistant"` row's plain text reached the user, stamped only
-     * by a turn that routed its reply through the `send_user_message` tool.
-     * `"private"` marks working notes the user never saw, which every
-     * user-facing read projects out (see `daemon/handlers/user-facing-content`);
-     * `"visible"` marks a fallback turn whose raw text was surfaced and so must
-     * render and deliver like any reply. Absent on every other row. Kept as a
-     * plain string, like {@link messageKind}, so an unknown future value never
-     * fails metadata validation.
-     */
-    assistantTextVisibility: z.string().optional(),
     /**
      * Stable classified error code (`ClassifiedConversationError.code`, e.g.
      * `"PROVIDER_BILLING"`) stamped alongside
@@ -948,8 +934,6 @@ interface InsertMessageCoreParams {
   /** The row is a reservation booked ahead of the content that will fill it
    *  ({@link reserveMessage}), so it carries nothing to read yet. */
   reserved?: boolean;
-  /** See {@link AddMessageOptions.skipResurface}. */
-  skipResurface?: boolean;
 }
 
 /**
@@ -1037,8 +1021,6 @@ async function insertMessageCore(
     clientMessageId,
     id,
     insertPrecondition,
-    reserved,
-    skipResurface,
   } = params;
   warnOnModelInvisibleContent(content, conversationId);
   const db = getDb();
@@ -1189,30 +1171,6 @@ async function insertMessageCore(
     },
     { op: "insertMessageCore", context: { conversationId } },
   );
-
-  // A message the user reads brings a Done conversation back to the list.
-  // Four kinds of insert are not that: the echo-suppressed set, which never
-  // renders in the transcript; the empty row `reserveMessage` books for an LLM
-  // call that has not run yet, whose content arrives at the finalize seam and
-  // resurfaces from there; a row whose producer declared it bookkeeping ABOUT
-  // the conversation rather than activity in it (`skipResurface`); and a
-  // deduplicated insert, which wrote no row at all. Best-effort: a failure
-  // here must not escalate into a failed persist.
-  if (
-    !inserted.deduplicated &&
-    !reserved &&
-    !skipResurface &&
-    !isEchoSuppressedUserMessage(metadata)
-  ) {
-    try {
-      resurfaceArchivedConversation(conversationId, inserted.createdAt);
-    } catch (err) {
-      log.warn(
-        { err, conversationId, messageId: inserted.id },
-        "Failed to resurface Done conversation after message insert",
-      );
-    }
-  }
 
   return inserted;
 }
@@ -2689,17 +2647,6 @@ export interface AddMessageOptions {
    * during that sleep.
    */
   insertPrecondition?: () => boolean;
-  /**
-   * The row is the assistant's bookkeeping ABOUT this conversation rather than
-   * activity in it, so it must not bring the conversation back from Done (see
-   * {@link resurfaceArchivedConversation}). The producer declares this, because
-   * only the producer knows which of the two a row is.
-   *
-   * The retrospective skill card is the case: a pass runs once a conversation
-   * has gone idle, which is exactly when the user has just marked it done, so
-   * a card that resurfaced would bounce fresh done chats back into the sidebar.
-   */
-  skipResurface?: boolean;
 }
 
 /**
@@ -2713,14 +2660,8 @@ export async function addMessage(
   content: string,
   options?: AddMessageOptions,
 ) {
-  const {
-    metadata,
-    skipIndexing,
-    clientMessageId,
-    id,
-    insertPrecondition,
-    skipResurface,
-  } = options ?? {};
+  const { metadata, skipIndexing, clientMessageId, id, insertPrecondition } =
+    options ?? {};
   const inserted = await insertMessageCore({
     conversationId,
     role,
@@ -2729,7 +2670,6 @@ export async function addMessage(
     clientMessageId,
     id,
     ...(insertPrecondition ? { insertPrecondition } : {}),
-    ...(skipResurface ? { skipResurface } : {}),
   });
 
   if (inserted.deduplicated) {
@@ -3596,62 +3536,6 @@ export function unarchiveConversation(id: string): boolean {
     now,
     now,
     id,
-  );
-  return true;
-}
-
-/**
- * Bring a Done conversation back to the list because a message the user reads
- * landed in it at `activityAt`.
- *
- * Under the `sidebar-done` gate "Done" is a completion mark, not a deletion:
- * the conversation keeps its schedules and its channel threads, so anything
- * the user would read arriving in it has to be reachable again. Two seams call
- * this, which between them cover every ingest path without a per-provider
- * hook: {@link insertMessageCore}, where each durable append lands (channel
- * inbound, web and CLI sends, wake tail messages, assistant-initiated
- * notification bodies), and the turn's finalize effect, where a streamed
- * assistant reply becomes readable content.
- *
- * Rows the user never reads resurface nothing. `insertMessageCore` excludes
- * the echo-suppressed set (hidden signals, subagent and ACP notifications, and
- * the `<background_event>` trigger each wake persists); the empty row an LLM
- * call reserves before it runs, so a call rejected before producing anything
- * leaves the conversation Done; and any row whose producer passed
- * {@link AddMessageOptions.skipResurface}. Retrospectives and memory
- * consolidation are excluded by construction: they append to a fork or to a
- * conversation of their own, never to the conversation under review.
- *
- * The clear is conditional on `archived_at <= activityAt` in one statement, so
- * a Done mark the user makes after this activity (while a turn's deferred tail
- * is still settling, or from the daemon while a worker runs the turn) wins
- * instead of being erased by it.
- *
- * No-ops when the gate is off, which is the shipped behavior: nothing but the
- * unarchive route clears `archived_at`.
- */
-export function resurfaceArchivedConversation(
-  conversationId: string,
-  activityAt: number,
-): boolean {
-  if (!isSidebarDoneEnabled(getConfig())) {
-    return false;
-  }
-  const now = Date.now();
-  const changed = rawRun(
-    "conversation:resurface",
-    "UPDATE conversations SET archived_at = NULL, updated_at = ? WHERE id = ? AND archived_at IS NOT NULL AND archived_at <= ?",
-    now,
-    conversationId,
-    activityAt,
-  );
-  if (changed === 0) {
-    return false;
-  }
-  publishConversationListAndMetadataChanged("reordered", conversationId);
-  log.info(
-    { conversationId },
-    "Resurfaced Done conversation on user-visible activity",
   );
   return true;
 }

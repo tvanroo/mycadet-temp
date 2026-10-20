@@ -16,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { win32 } from "node:path";
 
 import { GATEWAY_PORT } from "../constants.js";
+import { cliCommand } from "../cli-name.js";
 import { ensureBinaryInstalled } from "../ensure-binary.js";
 import {
   INGRESS_LAST_TUNNEL_KEY,
@@ -496,7 +497,7 @@ export async function runTailscaleTunnel(
     "This URL is reachable only from devices signed in to your tailnet.",
   );
   console.log(
-    "For public webhook ingress, run `cadet tunnel --help` to see the public providers.",
+    `For public webhook ingress, run \`${cliCommand()} tunnel start --help\` to see the public providers.`,
   );
   console.log("");
   console.log(

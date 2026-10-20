@@ -3,7 +3,7 @@ import {
   listConversations,
   searchConversations,
 } from "../../persistence/conversation-queries.js";
-import { userFacingTextOfRow } from "../../persistence/user-facing-content.js";
+import { extractTextFromStoredMessageContent } from "../../persistence/message-content.js";
 import { renderHistoryContent } from "./shared.js";
 
 // ---------------------------------------------------------------------------
@@ -77,12 +77,7 @@ export function getMessageContent(
 
   try {
     const content = dbMessage.content;
-    const rendered = renderHistoryContent(
-      content,
-      undefined,
-      undefined,
-      dbMessage.metadata,
-    );
+    const rendered = renderHistoryContent(content);
     text = rendered.text || undefined;
     const parsedToolCalls = rendered.toolCalls;
 
@@ -96,8 +91,7 @@ export function getMessageContent(
   } catch {
     // Same projection as the render above: the raw-extract fallback must not
     // become the one path that shows a private scratchpad.
-    text =
-      userFacingTextOfRow(dbMessage.content, dbMessage.metadata) || undefined;
+    text = extractTextFromStoredMessageContent(dbMessage.content) || undefined;
   }
 
   return {

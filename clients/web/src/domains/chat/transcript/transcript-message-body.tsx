@@ -80,7 +80,6 @@ import {
   turnToolCalls,
 } from "@/domains/chat/transcript/quiet-turn";
 import { parseInlineSurfaces } from "@/domains/chat/utils/parse-inline-surfaces";
-import { useHideThinkingUi } from "@/domains/chat/hooks/use-hide-thinking-ui";
 import { useSmoothStreamText } from "@/domains/chat/hooks/use-smooth-stream-text";
 import { useTranslation } from "@/i18n";
 import { useSupportsRedactedCredentialChips } from "@/lib/backwards-compat/use-supports-redacted-credential-chips";
@@ -170,7 +169,6 @@ export function TranscriptMessageBody({
   assistantDisplayName,
   onSurfaceAction,
   onForkConversation,
-  onSummarizeUpToHere,
   onRetryLatestTurn,
   onInspectMessage,
   onOpenRuleEditor,
@@ -194,13 +192,6 @@ export function TranscriptMessageBody({
   const isSlackReaction = getMessageRenderKind(message) === "slackReaction";
   const isUser = message.role === "user";
   const isStandaloneFrameGroup = isUser && cameraFrames?.[0]?.id === message.id;
-  // Two reasons this row shows no reasoning: the transcript-wide gate, and the
-  // row's own private marker. `groupOptionsForMessage` drops the settled blocks
-  // for either; this is what keeps the live row from shimmering a "Thinking"
-  // label over the reply while the turn is still running.
-  const hideThinkingUi = useHideThinkingUi();
-  const hidesThinking =
-    hideThinkingUi || message.assistantTextVisibility === "private";
   const hasCanonicalAttachments =
     !isStandaloneFrameGroup && Boolean(message.attachments?.length);
   // Gated on the transcript owner: an older daemon neutralizes nothing, so
@@ -213,7 +204,7 @@ export function TranscriptMessageBody({
   // carries no reasoning the user reads.
   const groups = groupContentBlocks(
     isStandaloneFrameGroup ? [] : (message.contentBlocks ?? []),
-    groupOptionsForMessage(message, hideThinkingUi),
+    groupOptionsForMessage(message),
   );
   const orderedMessageToolCalls = useMemo(
     () =>
@@ -325,10 +316,6 @@ export function TranscriptMessageBody({
   const forkHandler =
     actionMessageId && onForkConversation
       ? () => onForkConversation(actionMessageId)
-      : undefined;
-  const summarizeHandler =
-    actionMessageId && onSummarizeUpToHere
-      ? () => onSummarizeUpToHere(actionMessageId)
       : undefined;
   const inspectMessageId = message.id;
   const inspectHandler =
@@ -1041,8 +1028,7 @@ export function TranscriptMessageBody({
     // inline thinking `SingleActivity`, plus any spawn cards. A trailing run
     // reads as still-streaming only while the row is live.
     const combinedThinking = thinkingContents.join("\n");
-    const showThinking =
-      !hidesThinking && (combinedThinking || (isStreaming && isLastGroup));
+    const showThinking = combinedThinking || (isStreaming && isLastGroup);
     return (
       <Fragment key={key}>
         {showThinking && (
@@ -1261,13 +1247,9 @@ export function TranscriptMessageBody({
 
   // An assistant turn that used tools shows its opening and its answer, with
   // its steps behind one progress line while it runs and a "Worked for"
-  // summary in the footer once it settles. A private row opts out: its texts
-  // are deliberate sends, and the live holdback would hide ones already read.
+  // summary in the footer once it settles.
   const quietTurn =
-    isAssistant &&
-    !isSlackReaction &&
-    message.assistantTextVisibility !== "private" &&
-    firstToolGroupIndex(groups) !== -1;
+    isAssistant && !isSlackReaction && firstToolGroupIndex(groups) !== -1;
   const quietTurnLive = quietTurn && isStreaming && isLatestMessage;
 
   // Copy and Read aloud stay visible on every copyable row, including the
@@ -1287,7 +1269,6 @@ export function TranscriptMessageBody({
           conversationId={conversationId}
           openInSlackUrl={slackMessageUrl}
           onFork={forkHandler}
-          onSummarizeUpToHere={summarizeHandler}
           onInspect={inspectHandler}
           onRetry={retryHandler}
           workSummary={
@@ -1344,7 +1325,6 @@ export function TranscriptMessageBody({
               conversationId={conversationId}
               openInSlackUrl={slackMessageUrl}
               onFork={forkHandler}
-              onSummarizeUpToHere={summarizeHandler}
               onInspect={inspectHandler}
               open={longPressOpen}
               onOpenChange={handleLongPressOpenChange}
@@ -1388,12 +1368,7 @@ export function TranscriptMessageBody({
   // the reader watched stream in. The last reason is the row's own marker, so a
   // row stays inline after the stream it was watched in ends.
   const collapsibleGroupIndexes = groups.flatMap((group, groupIndex) => {
-    if (
-      hideThinkingUi ||
-      message.assistantTextVisibility === "private" ||
-      isStreaming ||
-      watchedLive
-    ) {
+    if (isStreaming || watchedLive) {
       return [];
     }
     if (groupIndex >= finalResponseGroupIndex) {
@@ -1576,7 +1551,6 @@ export function TranscriptMessageBody({
             conversationId={conversationId}
             openInSlackUrl={slackMessageUrl}
             onFork={forkHandler}
-            onSummarizeUpToHere={summarizeHandler}
             onInspect={inspectHandler}
             open={longPressOpen}
             onOpenChange={handleLongPressOpenChange}

@@ -53,7 +53,6 @@ import {
 } from "@/components/sidebar-nav-geometry";
 import { useCommandShortcutHint } from "@/hooks/use-command-shortcut";
 import { useAssistantAvatar } from "@/hooks/use-assistant-avatar";
-import { useInChatOnboardingStore } from "@/stores/in-chat-onboarding-store";
 import { eyeStyleBaseWidth } from "@/utils/assistant-eyes";
 import { toneForBg } from "@/utils/avatar-tone";
 
@@ -140,13 +139,11 @@ function NewChatButton({
   size,
   tooltipSide,
   onSelect,
-  drained,
 }: {
   size: number;
   tooltipSide: "right" | "top";
   onSelect: () => void;
   /** The tour owns the nav: drop the assistant's colour with the pill's. */
-  drained: boolean;
 }) {
   const { t } = useTranslation("chat");
   const hint = useCommandShortcutHint("newConversation");
@@ -164,7 +161,7 @@ function NewChatButton({
       <SidebarDiscButton
         icon={Plus}
         size={size}
-        variant={drained ? "ghost" : "accent"}
+        variant="accent"
         aria-label={label}
         onClick={onSelect}
         className="self-center"
@@ -223,10 +220,6 @@ export function AssistantNavItem({
     accentHex: hex,
   } = useAssistantAvatar(assistantId);
   const reduce = useReducedMotion();
-  // While the onboarding tour owns the nav rows (flooding them with its own
-  // eyes treatment), this component's eyes and its loop stay completely
-  // suppressed and the assistant row drains to a plain nav item.
-  const navTourActive = useInChatOnboardingStore.use.navTourActive();
   /* Drives the collapsed rail's pulse only. The expanded row's eyes hold still,
      so nothing there subscribes to these controls and the loop leaves them
      alone while the rail is open. */
@@ -253,15 +246,6 @@ export function AssistantNavItem({
   const eyesHeight = eye ? eyesWidth * (eye.bbox.h / eye.bbox.w) : 0;
 
   useEffect(() => {
-    if (navTourActive) {
-      /* Snap back to rest so a tour starting mid-pulse doesn't strand the
-         sprite grown. Guarded, as every controls call here is: only the
-         collapsed tile subscribes to them. */
-      if (collapsed) {
-        eyesControls.set({ scale: 1 });
-      }
-      return;
-    }
     if (reduce) {
       return;
     }
@@ -322,14 +306,13 @@ export function AssistantNavItem({
         eyesControls.stop();
       }
     };
-  }, [reduce, navTourActive, collapsed, eyesControls]);
+  }, [reduce, collapsed, eyesControls]);
 
   const newChatButton = onNewConversation ? (
     <NewChatButton
       size={collapsed ? SIDE_MENU_TILE_SIZE : DISC_SIZE}
       tooltipSide={collapsed ? "right" : "top"}
       onSelect={onNewConversation}
-      drained={navTourActive}
     />
   ) : null;
   /* Where the button stands: on the collapsed rail as its own tile, since a
@@ -345,22 +328,16 @@ export function AssistantNavItem({
      Not `ChatAvatar`: that would also replace the Brain for assistants with no
      avatar at all, since it falls back to a generated default character and
      then to a "V", and it brings a mount spring and the poke sound into a nav
-     row. Only the uploaded-image case wants changing here.
-
-     Suppressed while the tour owns the nav, matching the way the character
-     avatar's colour drains and the Brain stands in for its eyes. */
+     row. Only the uploaded-image case wants changing here. */
   /* One answer to "is there an uploaded image to wear", read by both the
      expanded slot and the collapsed tile so the two cannot disagree. A url
      rather than a boolean, so each render site has the value it needs. */
-  const uploadedAvatarUrl = navTourActive ? null : customImageUrl;
+  const uploadedAvatarUrl = customImageUrl;
 
   /* The switcher's affordances follow the identity treatment: the collapsed
-     tile has no slot for a trailing control, and the tour's drained nav must
-     not carry a live switcher. */
-  const pillTrailingAction =
-    !collapsed && !navTourActive ? trailingAction : undefined;
-  const activeExpansion =
-    !collapsed && !navTourActive ? (expansion ?? null) : null;
+     tile has no slot for a trailing control. */
+  const pillTrailingAction = !collapsed ? trailingAction : undefined;
+  const activeExpansion = !collapsed ? (expansion ?? null) : null;
   const pillGapClass = pillTrailingAction ? "gap-[12px]" : undefined;
   /* The pill keeps hugging its label with the New Chat button following it
      at the stack's own gap, so the two read as one cluster rather than a
@@ -526,16 +503,13 @@ export function AssistantNavItem({
      the New Chat button and the pinned apps wear, so the column's tinted
      surfaces agree and the disc is the pill's one solid surface. Declared as the
      pill's tint properties rather than written over `PanelItem`'s classes;
-     hover and current-page raise the wash a step. While the tour owns the
-     nav the colour drains away entirely: nothing is declared, so the pill
-     falls back to its plain surface and the tour's flood is the only colour
-     on screen. */
+     hover and current-page raise the wash a step. */
   const tintStyle: CustomPropertyStyle = {
-    ...(!navTourActive && hex ? panelItemWashStyle(hex) : undefined),
+    ...(hex ? panelItemWashStyle(hex) : undefined),
     ...DISC_PILL_STYLE,
     "--pill-flood-fg": fg,
   };
-  const floods = !navTourActive && Boolean(hex);
+  const floods = Boolean(hex);
 
   /* The eyes, holding still in the pill's leading disc: centred in the same
      chip-width box the section icons use, and that box centred in the disc,
@@ -548,17 +522,7 @@ export function AssistantNavItem({
       className="pointer-events-none relative flex shrink-0 items-center justify-center"
       style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
     >
-      {navTourActive && (
-        <Brain
-          className="h-3.5 w-3.5"
-          style={{
-            color: active
-              ? "var(--content-default)"
-              : "var(--content-tertiary)",
-          }}
-        />
-      )}
-      {!navTourActive && eye && (
+      {eye && (
         <span
           className="absolute"
           style={{
@@ -575,9 +539,7 @@ export function AssistantNavItem({
   );
 
   /* The disc: the pill's one solid surface, painted in the assistant's
-     colour with the eyes on it (Figma 8300:167394). While the tour owns the
-     nav it drains with the wash and the Brain stands in the slot on nothing,
-     as the plain pill's does. */
+     colour with the eyes on it (Figma 8300:167394). */
   const eyesDisc = (
     <span
       aria-hidden="true"
@@ -585,7 +547,7 @@ export function AssistantNavItem({
       style={{
         width: DISC_SIZE,
         height: DISC_SIZE,
-        backgroundColor: navTourActive ? undefined : hex,
+        backgroundColor: hex,
         color: fg,
       }}
     >
@@ -620,19 +582,17 @@ export function AssistantNavItem({
         "outline-none keyboard-focus:ring-2 keyboard-focus:ring-[var(--ring)]",
         "transition-[filter,transform,background-color,color] duration-300 active:scale-[0.98]",
         "bg-[var(--panel-item-bg,var(--surface-lift))]",
-        navTourActive
-          ? "[@media(hover:hover)]:hover:bg-[var(--panel-item-hover,var(--surface-hover))]"
-          : "hover:brightness-105",
+        "hover:brightness-105",
       )}
       style={{
         width: SIDE_MENU_TILE_SIZE,
         height: SIDE_MENU_TILE_SIZE,
         gap: SIDEBAR_CHIP_GAP,
-        backgroundColor: navTourActive ? "transparent" : hex,
-        color: navTourActive ? "var(--content-default)" : fg,
+        backgroundColor: hex,
+        color: fg,
       }}
     >
-      {!navTourActive && eye && (
+      {eye && (
         <motion.span
           className="pointer-events-none relative block"
           style={{

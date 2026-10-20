@@ -9,10 +9,6 @@ import {
 } from "../persistence/conversation-crud.js";
 import { stringifyMessageContent } from "../persistence/message-content.js";
 import {
-  isPrivateAssistantText,
-  projectPersistedAssistantContent,
-} from "../persistence/user-facing-content.js";
-import {
   decodeLiteralLineBreaks,
   stripMarkdownForPreview,
   truncate,
@@ -101,16 +97,14 @@ export function collectRunRows(
   }
 }
 
-/** Read the persisted user-facing result, walking back through private wrap-up
- * rows. Keep markdown for the feed detail panel; flatten only to check emptiness. */
+/** Read the persisted result. Keep markdown for the feed detail panel;
+ * flatten only to check emptiness. */
 export function resolveRunResult(
   runRows: readonly MessageRow[],
 ): { body: string; row: MessageRow } | undefined {
   for (let i = runRows.length - 1; i >= 0; i--) {
     const row = runRows[i];
-    const text = stringifyMessageContent(
-      projectPersistedAssistantContent(row.content, row.metadata),
-    );
+    const text = stringifyMessageContent(row.content);
     const flattened = stripMarkdownForPreview(text).replace(/\s+/g, " ").trim();
     if (flattened) {
       return {
@@ -121,9 +115,7 @@ export function resolveRunResult(
         row,
       };
     }
-    if (!isPrivateAssistantText(row.metadata)) {
-      return undefined;
-    }
+    return undefined;
   }
   return undefined;
 }

@@ -38,7 +38,6 @@ import {
   readMessageSentAt,
   readModeSessionMetadata,
 } from "../persistence/message-metadata.js";
-import { assistantTextVisibilityOf } from "../persistence/user-facing-content.js";
 import type { ContentBlock } from "../providers/types.js";
 import { getLogger } from "../util/logger.js";
 
@@ -54,24 +53,6 @@ const log = getLogger("message-consolidation");
  */
 function isStandaloneAssistantRow(msg: MessageRow): boolean {
   return isStandaloneAssistantMessage(msg.role, msg.metadata);
-}
-
-/**
- * Whether two adjacent assistant rows agree about what their plain text is.
- *
- * A merged run keeps the anchor's metadata, and the user-facing projection
- * keys on that metadata, so folding rows that disagree would apply one row's
- * answer to the other's text. The case that matters: a `send_user_message`
- * turn's private row followed by the fallback row that surfaced its raw text.
- * Merged under the anchor's `"private"` marker, the fallback answer would
- * project to working notes and vanish from the transcript on reload. They are
- * two display turns because they were two different things.
- */
-function sameAssistantTextVisibility(a: MessageRow, b: MessageRow): boolean {
-  return (
-    assistantTextVisibilityOf(a.metadata) ===
-    assistantTextVisibilityOf(b.metadata)
-  );
 }
 
 function sameModeSessionOwnership(a: MessageRow, b: MessageRow): boolean {
@@ -175,7 +156,6 @@ export function findDisplayTurnEndIndex(
     if (
       next.role === "assistant" &&
       !isStandaloneAssistantRow(next) &&
-      sameAssistantTextVisibility(messages[startIdx]!, next) &&
       sameModeSessionOwnership(messages[startIdx]!, next)
     ) {
       endIdx += 1;
@@ -366,7 +346,6 @@ export function mergeConsecutiveAssistantMessages(messages: MessageRow[]): {
       lastIdx >= 0 &&
       result[lastIdx].role === "assistant" &&
       !isStandaloneAssistantRow(result[lastIdx]) &&
-      sameAssistantTextVisibility(result[lastIdx], msg) &&
       sameModeSessionOwnership(result[lastIdx], msg);
 
     if (!isConsecutiveAssistant) {

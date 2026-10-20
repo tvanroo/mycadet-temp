@@ -162,6 +162,7 @@ export async function getAssistant(
         status: 200,
         data: {
           id: lockfileAssistant.assistantId,
+          handle: lockfileAssistant.assistantId,
           name: lockfileAssistant.name ?? lockfileAssistant.assistantId,
           status: "active",
           is_local: true,
@@ -479,7 +480,8 @@ export async function restartAssistant(
 }
 
 export type RetireResult =
-  { ok: true } | { ok: false; status: number; error: Record<string, unknown> };
+  | { ok: true }
+  | { ok: false; status: number; error: Record<string, unknown> };
 
 export interface RetireAssistantOptions {
   /**

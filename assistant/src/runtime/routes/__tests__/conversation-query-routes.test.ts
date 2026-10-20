@@ -1094,49 +1094,45 @@ describe("PUT /v1/config/llm/profiles/:name", () => {
         label: "Balanced",
         status: "active",
       };
-      profiles["os-beta"] = {
-        provider: "cadet",
-        model: "claude-sonnet-4-6",
-        label: "OS Beta",
-        status: "active",
-      };
       seedRawConfig();
     });
 
-    test("rejects label edit on managed os-beta profile (invariant)", async () => {
+    test("rejects label edit on managed balanced profile (invariant)", async () => {
       await expect(
         replaceProfileRoute.handler({
-          pathParams: { name: "os-beta" },
-          body: { label: "My OS Beta" },
+          pathParams: { name: "balanced" },
+          body: { label: "My Balanced" },
         }),
-      ).rejects.toThrow(/Cannot edit cloud profile "os-beta" fields \[label\]/);
+      ).rejects.toThrow(
+        /Cannot edit cloud profile "balanced" fields \[label\]/,
+      );
       // Guard rejects before any write — the seed label is untouched.
-      expect(persistedProfile("os-beta").label).toBe("OS Beta");
+      expect(persistedProfile("balanced").label).toBe("Balanced");
     });
 
-    test("rejects disable on managed os-beta profile (invariant)", async () => {
+    test("rejects disable on managed balanced profile (invariant)", async () => {
       await expect(
         replaceProfileRoute.handler({
-          pathParams: { name: "os-beta" },
+          pathParams: { name: "balanced" },
           body: { status: "disabled" },
         }),
       ).rejects.toThrow(
-        'Cannot edit cloud profile "os-beta". Cloud profiles are read-only',
+        'Cannot edit cloud profile "balanced". Cloud profiles are read-only',
       );
       // Guard rejects before any write — the seed status is untouched.
-      expect(persistedProfile("os-beta").status).toBe("active");
+      expect(persistedProfile("balanced").status).toBe("active");
     });
 
-    test("re-enables a disabled managed os-beta profile, preserving seed fields", async () => {
+    test("re-enables a disabled managed balanced profile, preserving seed fields", async () => {
       (
         rawConfigFixture.llm as {
           profiles: Record<string, Record<string, unknown>>;
         }
-      ).profiles["os-beta"]!.status = "disabled";
+      ).profiles["balanced"]!.status = "disabled";
       seedRawConfig();
 
       const result = await replaceProfileRoute.handler({
-        pathParams: { name: "os-beta" },
+        pathParams: { name: "balanced" },
         body: { status: "active" },
       });
 
@@ -1145,7 +1141,7 @@ describe("PUT /v1/config/llm/profiles/:name", () => {
         loadRawConfig().llm as {
           profiles: Record<string, Record<string, unknown>>;
         }
-      ).profiles["os-beta"]!;
+      ).profiles["balanced"]!;
 
       expect(savedProfile.status).toBe("active");
       // Seed fields preserved.
@@ -1566,11 +1562,11 @@ describe("config GET serves profiles verbatim", () => {
             label: "Balanced",
             status: "active",
           },
-          "os-beta": {
+          "jev-managed": {
             source: "cloud",
             provider: "together",
             model: "zai-org/GLM-5.2",
-            label: "OS Beta",
+            label: "Jev",
             status: "active",
           },
           "cost-optimized": {
@@ -1867,7 +1863,6 @@ describe("persisted chat settings", () => {
     rawConfigFixture = {
       conversations: {
         skipAutoRetitling: true,
-        autoArchive: { enabled: true, afterDays: 14, futureOption: "keep" },
       },
       notifications: { newMessageEnabled: false, futureOption: "keep" },
       maxStepsPerSession: 75,
@@ -1898,10 +1893,6 @@ describe("persisted chat settings", () => {
       { conversations: [] },
       { conversations: null },
       { conversations: { autoArchive: "legacy" } },
-      { conversations: { autoArchive: [] } },
-      { conversations: { autoArchive: null } },
-      { conversations: { autoArchive: { enabled: "true", afterDays: 2 } } },
-      { conversations: { autoArchive: { enabled: null, afterDays: null } } },
       { notifications: "legacy" },
       { notifications: [] },
       { notifications: null },
@@ -1928,40 +1919,21 @@ describe("persisted chat settings", () => {
 
     test(`${writer} can repair one leaf without changing other legacy values`, async () => {
       rawConfigFixture = {
-        conversations: { autoArchive: { enabled: "true", afterDays: 14 } },
-        notifications: null,
+        notifications: { newMessageEnabled: "false" },
+        maxStepsPerSession: 75,
       };
       seedRawConfig();
       invalidateConfigCache();
 
-      await writeSetting(writer, "conversations.autoArchive.enabled", true);
+      await writeSetting(writer, "notifications.newMessageEnabled", true);
 
       expect(loadRawConfig()).toMatchObject({
-        conversations: { autoArchive: { enabled: true, afterDays: 14 } },
+        notifications: { newMessageEnabled: true },
       });
-    });
-
-    test(`${writer} rejects an invalid leaf change beside an unchanged invalid sibling`, async () => {
-      rawConfigFixture = {
-        conversations: { autoArchive: { enabled: "true", afterDays: 2 } },
-      };
-      seedRawConfig();
-      invalidateConfigCache();
-      const configPath = join(process.env.CADET_WORKSPACE_DIR!, "config.json");
-      const originalBytes = readFileSync(configPath, "utf-8");
-
-      await expect(
-        writeSetting(writer, "conversations.autoArchive.afterDays", 3),
-      ).rejects.toMatchObject({ statusCode: 400 });
-
-      expect(readFileSync(configPath, "utf-8")).toBe(originalBytes);
-      expect(initializeProvidersCalls).toBe(0);
     });
 
     test.each([
       ["conversations", []],
-      ["conversations.autoArchive", { enabled: "true" }],
-      ["conversations.autoArchive", { afterDays: 2 }],
       ["notifications.newMessageEnabled", "true"],
       ["notifications.newMessageEnabled", 1],
     ])(
@@ -1995,22 +1967,18 @@ describe("persisted chat settings", () => {
 
   test("PATCH resets only the explicitly nulled legacy leaf", async () => {
     rawConfigFixture = {
-      conversations: { autoArchive: { enabled: null, afterDays: null } },
       notifications: { newMessageEnabled: null },
     };
     seedRawConfig();
     invalidateConfigCache();
 
     await patchRoute.handler({
-      body: { conversations: { autoArchive: { enabled: null } } },
+      body: { notifications: { newMessageEnabled: null } },
     });
 
     // Nulled leaves reset to the schema default on the canonical save (the
     // read-time recovery had already cleaned the stored nulls).
-    expect(getConfig().conversations.autoArchive).toEqual({
-      enabled: false,
-      afterDays: 7,
-    });
+    expect(getConfig().notifications.newMessageEnabled).toBe(true);
   });
 
   test("sparse GET returns the fully materialized typed config with effective chat settings", async () => {
@@ -2020,7 +1988,6 @@ describe("persisted chat settings", () => {
     const result = await getRoute.handler({});
     expect(result).toMatchObject({
       conversations: {
-        autoArchive: { enabled: false, afterDays: 7 },
         skipAutoRetitling: false,
       },
       notifications: { newMessageEnabled: true },
@@ -2040,12 +2007,11 @@ describe("persisted chat settings", () => {
     });
     try {
       const result = await patchRoute.handler({
-        body: { conversations: { autoArchive: { afterDays: 30 } } },
+        body: { conversations: { skipAutoRetitling: true } },
       });
       expect(result).toMatchObject({
         conversations: {
           skipAutoRetitling: true,
-          autoArchive: { enabled: true, afterDays: 30 },
         },
         notifications: { newMessageEnabled: false },
         maxStepsPerSession: 75,
@@ -2054,15 +2020,11 @@ describe("persisted chat settings", () => {
         maxStepsPerSession: 75,
         conversations: {
           skipAutoRetitling: true,
-          autoArchive: { enabled: true, afterDays: 30 },
         },
         notifications: { newMessageEnabled: false },
       });
       invalidateConfigCache();
-      expect(getConfig().conversations.autoArchive).toEqual({
-        enabled: true,
-        afterDays: 30,
-      });
+      expect(getConfig().conversations.skipAutoRetitling).toBe(true);
       expect(getConfig().notifications.newMessageEnabled).toBe(false);
       expect(await getRoute.handler({})).toEqual(result);
       expect(initializeProvidersCalls).toBe(1);
@@ -2082,23 +2044,17 @@ describe("persisted chat settings", () => {
   test("PATCH null leaves restore defaults and preserve sibling values", async () => {
     const result = await patchRoute.handler({
       body: {
-        conversations: { autoArchive: { enabled: null, afterDays: null } },
         notifications: { newMessageEnabled: null },
       },
     });
     expect(result).toMatchObject({
       conversations: {
         skipAutoRetitling: true,
-        autoArchive: { enabled: false, afterDays: 7 },
       },
       notifications: { newMessageEnabled: true },
     });
     // The nulled leaves restore to the schema defaults on the canonical
     // save; the unknown sibling key (futureOption) doesn't persist.
-    expect(getConfig().conversations.autoArchive).toEqual({
-      enabled: false,
-      afterDays: 7,
-    });
     expect(getConfig().notifications.newMessageEnabled).toBe(true);
     expect(
       "futureOption" in
@@ -2106,29 +2062,21 @@ describe("persisted chat settings", () => {
     ).toBe(false);
   });
 
-  test.each([
-    { conversations: { autoArchive: null }, notifications: null },
-    { conversations: null, notifications: null },
-  ])("PATCH null subtrees restore defaults: %j", async (body) => {
-    const result = await patchRoute.handler({ body });
-    expect(result).toMatchObject({
-      conversations: { autoArchive: { enabled: false, afterDays: 7 } },
-      notifications: { newMessageEnabled: true },
-    });
-    // The nulled subtrees restore to the schema defaults on the canonical
-    // save — the same values a fresh read would materialize.
-    expect(getConfig().conversations.autoArchive).toEqual({
-      enabled: false,
-      afterDays: 7,
-    });
-    expect(getConfig().notifications.newMessageEnabled).toBe(true);
-  });
+  test.each([{ conversations: null, notifications: null }])(
+    "PATCH null subtrees restore defaults: %j",
+    async (body) => {
+      const result = await patchRoute.handler({ body });
+      expect(result).toMatchObject({
+        notifications: { newMessageEnabled: true },
+      });
+      // The nulled subtrees restore to the schema defaults on the canonical
+      // save — the same values a fresh read would materialize.
+      expect(getConfig().notifications.newMessageEnabled).toBe(true);
+    },
+  );
 
   test.each([
     { conversations: false },
-    { conversations: { autoArchive: [] } },
-    { conversations: { autoArchive: { enabled: "true" } } },
-    { conversations: { autoArchive: { afterDays: 5 } } },
     { notifications: "off" },
     { notifications: { newMessageEnabled: 0 } },
   ])(
@@ -2145,32 +2093,30 @@ describe("persisted chat settings", () => {
   );
 
   test.each([false, "legacy", [], null])(
-    "PATCH null resets a malformed stored autoArchive subtree: %j",
-    async (autoArchive) => {
+    "PATCH null resets a malformed stored notifications subtree: %j",
+    async (notifications) => {
       rawConfigFixture = {
-        conversations: { skipAutoRetitling: true, autoArchive },
-        notifications: { newMessageEnabled: false },
+        conversations: { skipAutoRetitling: true },
+        notifications,
         maxStepsPerSession: 75,
       };
       seedRawConfig();
       invalidateConfigCache();
 
       const result = await patchRoute.handler({
-        body: { conversations: { autoArchive: null } },
+        body: { notifications: null },
       });
 
       expect(result).toMatchObject({
         conversations: {
           skipAutoRetitling: true,
-          autoArchive: { enabled: false, afterDays: 7 },
         },
-        notifications: { newMessageEnabled: false },
+        notifications: { newMessageEnabled: true },
       });
       // The valid legacy values ride; the malformed subtree heals to the
       // schema defaults on the canonical save.
       expect(loadRawConfig()).toMatchObject({
         conversations: { skipAutoRetitling: true },
-        notifications: { newMessageEnabled: false },
         maxStepsPerSession: 75,
       });
     },
@@ -2192,7 +2138,6 @@ describe("persisted chat settings", () => {
       });
 
       expect(result).toMatchObject({
-        conversations: { autoArchive: { enabled: false, afterDays: 7 } },
         notifications: { newMessageEnabled: true },
       });
       expect(loadRawConfig()).toMatchObject({ maxStepsPerSession: 75 });
@@ -2212,9 +2157,6 @@ describe("persisted chat settings", () => {
   });
 
   test.each([
-    ["conversations.autoArchive.afterDays", 2],
-    ["conversations.autoArchive.enabled", null],
-    ["conversations.autoArchive", []],
     ["notifications.newMessageEnabled", "false"],
     ["notifications", null],
   ])("invalid SET %s is rejected before saving", async (path, value) => {

@@ -11,7 +11,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   Bell,
-  Bookmark,
   Bug,
   Cpu,
   KeyRound,
@@ -19,7 +18,6 @@ import {
   Users,
   Puzzle,
   ShieldCheck,
-  Smile,
   SlidersHorizontal,
   Volume2,
 } from "lucide-react";
@@ -39,12 +37,10 @@ export const PANEL_IDS = [
   "voice",
   "sounds",
   "privacy",
-  "bookmarks",
   "billing",
   "community",
   "assistant-status",
   "debug",
-  "personality",
 ] as const;
 
 export type PanelId = (typeof PANEL_IDS)[number];
@@ -114,12 +110,6 @@ export const SETTINGS_SIDEBAR: SidebarItem[] = [
     icon: ShieldCheck,
   },
   {
-    id: "bookmarks",
-    label: "Bookmarks",
-    href: routes.settings.bookmarks,
-    icon: Bookmark,
-  },
-  {
     id: "billing",
     label: "Usage",
     href: routes.settings.usage,
@@ -132,12 +122,6 @@ export const SETTINGS_SIDEBAR: SidebarItem[] = [
     icon: Users,
   },
   { id: "debug", label: "Debug", href: routes.settings.debug, icon: Bug },
-  {
-    id: "personality",
-    label: "Personality",
-    href: routes.settings.personality,
-    icon: Smile,
-  },
 ];
 
 const SETTINGS_TAB_ID_ALIASES: Record<string, PanelId> = {

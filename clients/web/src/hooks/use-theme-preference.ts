@@ -6,7 +6,6 @@ import {
   type ThemePreference,
   writeStoredThemePreference,
 } from "@/utils/theme-preferences";
-import { useClientFeatureFlagStore } from "@/stores/client-feature-flag-store";
 import { syncNativeLaunchScreenTheme } from "@/runtime/native-launch-screen";
 import { watchDeviceSetting } from "@/utils/device-settings";
 
@@ -19,20 +18,19 @@ import { watchDeviceSetting } from "@/utils/device-settings";
  * @returns the current theme and a setter that persists + applies the choice.
  */
 export function useThemePreference() {
-  const velvet = useClientFeatureFlagStore.use.velvet();
   const [theme, setTheme] = useState<ThemePreference>(() =>
-    readStoredThemePreference({ velvetEnabled: velvet }),
+    readStoredThemePreference(),
   );
 
   useEffect(() => {
-    setTheme(readStoredThemePreference({ velvetEnabled: velvet }));
-  }, [velvet]);
+    setTheme(readStoredThemePreference());
+  }, []);
 
   useEffect(() => {
     return watchDeviceSetting("theme", () => {
-      setTheme(readStoredThemePreference({ velvetEnabled: velvet }));
+      setTheme(readStoredThemePreference());
     });
-  }, [velvet]);
+  }, []);
 
   useEffect(() => {
     applyThemePreference(theme);

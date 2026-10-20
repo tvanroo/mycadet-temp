@@ -25,9 +25,7 @@ import {
   hasAnyInteractiveSurface,
   hasPendingAssistantResponse,
 } from "@/domains/chat/utils/chat";
-import { useHideThinkingUi } from "@/domains/chat/hooks/use-hide-thinking-ui";
 import {
-  hasRenderedStepStack,
   hasRenderedThinking,
 } from "@/domains/chat/transcript/message-content";
 import { liveAssistantRowId } from "@/domains/chat/utils/stream-updaters/shared";
@@ -106,7 +104,6 @@ export function useChatUIState(): ChatUIState {
   // source of truth on 0.8.8+; older daemons fall back to the client
   // optimistic mirror. See `lib/backwards-compat/conversation-processing-state`.
   const activeConversationIsProcessing = useActiveConversationIsProcessing();
-  const hideThinkingUi = useHideThinkingUi();
 
   const activeConversationHasPendingAssistantResponse = useMemo(
     () => hasPendingAssistantResponse(transcript),
@@ -134,8 +131,8 @@ export function useChatUIState(): ChatUIState {
     if (!live) {
       return false;
     }
-    return hasRenderedThinking(live, hideThinkingUi);
-  }, [transcript, liveAssistantMessageId, hideThinkingUi]);
+    return hasRenderedThinking(live);
+  }, [transcript, liveAssistantMessageId]);
 
   // Under `send-user-message` the step stack is the turn's one progress
   // label, and the quiet-turn progress line is the other, so the standalone
@@ -149,10 +146,8 @@ export function useChatUIState(): ChatUIState {
     if (live == null) {
       return false;
     }
-    return hideThinkingUi
-      ? hasRenderedStepStack(live)
-      : hasQuietTurnProgress(live);
-  }, [transcript, liveAssistantMessageId, hideThinkingUi]);
+    return hasQuietTurnProgress(live);
+  }, [transcript, liveAssistantMessageId]);
 
   const hasUncompletedVisibleSurface = useMemo(
     () => hasAnyInteractiveSurface(transcript),

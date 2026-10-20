@@ -15,8 +15,8 @@
 # package.json is missing fails every image build.
 # Listed explicitly: a `!` pattern with a wildcard before its final path
 # segment disables directory pruning for the entire context walk.
+!clients/android/package.json
 !clients/app/package.json
-!clients/chrome-extension/package.json
 !clients/docs/package.json
 !clients/linux/package.json
 !clients/macos/package.json
@@ -29,8 +29,17 @@
 # Adding an explicit exclusion rule seems to help with this.
 clients/.build
 clients/docs/.next
-clients/ios
-clients/chrome-extension
+# dockerignore is last-match-wins: a negation BEFORE an exclude is defeated
+# by it — run #91 delivered bun a name-less clients/ios manifest (the old
+# whitelist lost to the wholesale `clients/ios` exclude) and every image
+# build died `Missing "name" from package.json in clients/ios`. Scope the
+# exclude to the directory's children and re-include the manifests AFTER it:
+# the parent dir itself is never excluded, so the re-include survives, and
+# the walker still prunes the heavy subtrees.
+clients/ios/*
+!clients/ios/package.json
+clients/chrome-extension/*
+!clients/chrome-extension/package.json
 clients/macos/apple-containers-runtime
 clients/macos/dist
 clients/macos/native

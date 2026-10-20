@@ -45,7 +45,6 @@ import { AnimatedAvatar } from "@/components/avatar/animated-avatar";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { recordUpdate } from "@/lib/commit-pressure";
 import { useIsNativeMobile } from "@/runtime/platform-detection";
-import { useInChatOnboardingStore } from "@/stores/in-chat-onboarding-store";
 import { useMobileDrawerStore } from "@/stores/mobile-drawer-store";
 import type { CharacterComponents, CharacterTraits } from "@/types/avatar";
 import { avatarPeekMetrics } from "@/utils/avatar-peek-metrics";
@@ -174,7 +173,6 @@ export function ComposerPeek({
 }: ComposerPeekProps) {
   const reduce = useReducedMotion();
   // The onboarding tour floods the composer itself — never compete with it.
-  const navTourActive = useInChatOnboardingStore.use.navTourActive();
   // Native shells can place the system status area over the top perch.
   // Browsers keep it; native mobile gets the bottom-edge hello instead.
   const nativeMobile = useIsNativeMobile();
@@ -198,8 +196,7 @@ export function ComposerPeek({
   // below and leaves the lifecycle alone.
   const drawerPresented = useMobileDrawerStore.use.presented();
 
-  const runnable =
-    active && !reduce && !navTourActive && !!components && !!traits;
+  const runnable = active && !reduce && !!components && !!traits;
 
   // Where this avatar's eye ink sits in its rendered square — drives the
   // per-shape crop/size below so the eyes always ride the edge.

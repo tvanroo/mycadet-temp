@@ -1,7 +1,8 @@
 import { connectImport } from "./connect/import.js";
+import { cliCommand } from "../lib/cli-name.js";
 
 function printUsage(): void {
-  console.log("Usage: cadet connect [beta] <subcommand>");
+  console.log(`Usage: ${cliCommand()} connect [beta] <subcommand>`);
   console.log("");
   console.log("Connect to an assistant paired from another machine.");
   console.log("");

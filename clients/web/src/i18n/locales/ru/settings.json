@@ -303,15 +303,6 @@
     "title": "Безопасность",
     "useForSignIn": "Использовать {label} для входа"
   },
-  "bookmarksPage": {
-    "emptyDescription": "Наведение на любое сообщение и нажатие значка закладки сохраняет его сюда.",
-    "emptyTitle": "Нет закладок",
-    "errorDescription": "Что-то пошло не так. Повторите попытку.",
-    "errorTitle": "Не удалось загрузить закладки",
-    "open": "Открыть",
-    "removeBookmark": "Убрать закладку",
-    "retry": "Повторить"
-  },
   "bulkOverrideSwapModal": {
     "affectedSummary": "{count, plural, one {# действие сейчас использует {profile}} few {# действия сейчас используют {profile}} many {# действий сейчас используют {profile}} other {# действия сейчас используют {profile}}}",
     "applyTo": "{count, plural, one {Применить к # действию} few {Применить к # действиям} many {Применить к # действиям} other {Применить к # действиям}}",
@@ -679,8 +670,6 @@
     "current": "Текущий",
     "customize": "Настроить",
     "dangerZoneTitle": "Опасная зона",
-    "handleSubtitle": "Ассистент, обслуживающий эту страницу.",
-    "handleTitle": "Идентификатор ассистента",
     "preferencesSubtitle": "Настройка того, как ассистент выглядит на этом устройстве.",
     "preferencesTitle": "Предпочтения",
     "retireAssistantDescription": "Навсегда удалить этого ассистента и все связанные данные.",
@@ -1636,8 +1625,7 @@
     "dark": "Тёмная",
     "light": "Светлая",
     "system": "Системная",
-    "title": "Тема",
-    "velvet": "Velvet"
+    "title": "Тема"
   },
   "tierPicker": {
     "machineAriaLabel": "Уровень машины",
@@ -2001,38 +1989,6 @@
     "redirectHint": "Этот URL: в настройки перенаправления OAuth-приложения.",
     "redirectUrl": "Redirect URL",
     "waitingAuthorization": "Ожидание авторизации..."
-  },
-  "personalityPage": {
-    "axes": {
-      "companionCoworker": {
-        "left": "Компаньон",
-        "right": "Коллега"
-      },
-      "executeCollaborate": {
-        "left": "Самостоятельный",
-        "right": "Совместный"
-      },
-      "genzBoomer": {
-        "left": "Gen Z",
-        "right": "Baby Boomer"
-      },
-      "playfulSerious": {
-        "left": "Игривый",
-        "right": "Серьёзный"
-      },
-      "politeUnfiltered": {
-        "left": "Вежливый",
-        "right": "Без фильтра"
-      }
-    },
-    "loadError": "Не удалось загрузить ползунки личности.",
-    "rangeAriaLabel": "{left} до {right}",
-    "save": "Сохранить",
-    "saveErrorToast": "Не удалось сохранить ползунки личности. Повторите попытку.",
-    "saveSuccessToast": "Ползунки личности сохранены.",
-    "saving": "Сохранение…",
-    "subtitle": "Сохраняет значения ползунков у этого ассистента. Файлы идентичности не переписываются.",
-    "title": "Личность"
   },
   "toneLab": {
     "title": "Лаборатория звуков",

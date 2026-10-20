@@ -76,7 +76,7 @@ type LoadState =
  * Inline preview for a text attachment inside the full-screen preview modal.
  * Markdown renders as formatted document content; every other text type
  * renders as monospace source. Content sits on a themed surface so it stays
- * legible on the modal's dark backdrop across light, dark, and velvet themes.
+ * legible on the modal's dark backdrop across light and dark themes.
  */
 export function TextPreview({
   url,

@@ -29,7 +29,6 @@ import type {
   TurnInterfaceContext,
 } from "../channels/types.js";
 import { parseChannelId, parseInterfaceId } from "../channels/types.js";
-import { isInterruptOnSendEnabled } from "../config/interrupt-on-send-gate.js";
 import {
   contextWindowConfigFromEffective,
   resolveEffectiveContextWindow,
@@ -37,7 +36,6 @@ import {
 import { resolveCallSiteConfig } from "../config/llm-resolver.js";
 import { getConfig } from "../config/loader.js";
 import type { LLMCallSite, Speed } from "../config/schemas/llm.js";
-import { resolveSendUserMessageActive } from "../config/send-user-message-gate.js";
 import { isModeSessionRecoveryHealthy } from "../config/session-groups-gate.js";
 import {
   derefToolResultReReads,
@@ -59,8 +57,8 @@ import {
   setConversationProcessingStartedAt,
 } from "../persistence/conversation-crud.js";
 import { getResolvedConversationDirPath } from "../persistence/conversation-directories.js";
+import { extractTextFromStoredMessageContent } from "../persistence/message-content.js";
 import { reportSlowSync } from "../persistence/slow-sync-log.js";
-import { userFacingTextOfRow } from "../persistence/user-facing-content.js";
 import { defaultCompact } from "../plugins/defaults/compaction/compact.js";
 import {
   createContextWindowManager,
@@ -113,7 +111,6 @@ import { ToolExecutor } from "../tools/executor.js";
 import { getAllToolDefinitions } from "../tools/registry.js";
 import type { OnboardingContext } from "../types/onboarding-context.js";
 import type { AbortReason } from "../util/abort-reasons.js";
-import { UserError } from "../util/errors.js";
 import { getLogger } from "../util/logger.js";
 import { withSqliteRetry } from "../util/sqlite-retry.js";
 import type { WorkspaceGitService } from "../workspace/git-service.js";
@@ -203,43 +200,10 @@ import { conversationMetadataSyncTag } from "./message-types/sync.js";
 import { bestEffortModeSessionTracking } from "./mode-session-tracking.js";
 import { renderReactionHistoryText } from "./reaction-history-render.js";
 import type { QueuedReactionRecord } from "./reaction-record.js";
-import {
-  resolveSummarizeBoundary,
-  startsNewTurn,
-} from "./summarize-boundary.js";
+import { startsNewTurn } from "./summarize-boundary.js";
 
 const log = getLogger("conversation");
 const PROMPT_CACHE_WARM_MAX_TOKENS = 16;
-
-/**
- * First text block of a persisted message row's content, mirroring
- * `loadFromDb`'s parse: non-JSON / non-array content loads as a single text
- * block holding the raw string. Returns null when the row's block array has
- * no text block. Used to verify the row→history boundary mapping in
- * {@link Conversation.summarizeUpToMessage}.
- */
-function firstPersistedTextBlockText(
-  content: string | ContentBlock[],
-): string | null {
-  try {
-    const parsed: unknown = Array.isArray(content)
-      ? content
-      : JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      const block = parsed.find(
-        (b): b is { type: "text"; text: string } =>
-          typeof b === "object" &&
-          b !== null &&
-          (b as { type?: unknown }).type === "text" &&
-          typeof (b as { text?: unknown }).text === "string",
-      );
-      return block?.text ?? null;
-    }
-  } catch {
-    // Non-JSON content loads as a raw text block.
-  }
-  return Array.isArray(content) ? null : content;
-}
 
 export interface CleanResult {
   previousEstimatedInputTokens: number;
@@ -294,10 +258,7 @@ export type {
   QueueDrainReason,
   QueuePolicy,
 } from "./conversation-queue-manager.js";
-import {
-  INTERNAL_GUARDIAN_TRUST_CONTEXT,
-  isPersonalMemoryAllowed,
-} from "./trust-context.js";
+import { isPersonalMemoryAllowed } from "./trust-context.js";
 import type { TrustContext } from "./trust-context-types.js";
 import { turnActorPrincipalId } from "./turn-actor.js";
 
@@ -658,17 +619,6 @@ export class Conversation {
   /** @internal */ currentTurnIsNonInteractive?: boolean;
   /** @internal */ currentTurnModelProfileNoticeKey?: string;
   /** @internal */ currentTurnRequestOrigin?: string;
-  /**
-   * Whether this turn routes its user-facing text through `send_user_message`,
-   * resolved once at turn start. The agent loop's suppression is pinned to
-   * this value for the whole turn, so the tool surface, the reserved row's
-   * visibility marker, and the prompt section read the same snapshot rather
-   * than the live flag: a remote flag change mid-turn must not mark an
-   * ordinarily streamed row private, nor take the only delivery tool away from
-   * a run that is still suppressing its text.
-   * @internal
-   */
-  currentTurnSendUserMessageActive?: boolean;
   /** @internal */ authContext?: AuthContext;
   /** @internal */ currentTurnAuthContext?: AuthContext;
   /**
@@ -1218,7 +1168,6 @@ export class Conversation {
       personaOverride: this.wakePersonaOverride,
       onboardingContext: this.getOnboardingContext(),
       conversationId: this.conversationId,
-      sendUserMessageTool: resolveSendUserMessageActive(this),
       delegateIndependentTasks,
     });
     // Recorded only once the build succeeds: a wake's prompt sync swallows a
@@ -1463,10 +1412,7 @@ export class Conversation {
             rowMeta.deletedAt === undefined &&
             rowMeta.messageId
           ) {
-            // Quote what the channel actually carried: on a row a
-            // `send_user_message` turn wrote, that is the message the tool
-            // delivered, not the private working notes beside it.
-            const text = userFacingTextOfRow(row.content, row.metadata);
+            const text = extractTextFromStoredMessageContent(row.content);
             if (text) {
               // A split reply posts several provider messages from one row;
               // a reaction may name any of them. A post deleted on its own
@@ -2632,10 +2578,10 @@ export class Conversation {
    * ordinary end-of-turn drain rather than by cutting a turn short.
    */
   canHandoffAtCheckpoint(): boolean {
-    if (isInterruptOnSendEnabled()) {
-      return false;
-    }
-    return this._processing && this.hasQueuedMessages();
+    // Interrupt-on-send is unconditional now: a busy send interrupts the turn
+    // instead of queueing, so the queue never holds entries a checkpoint
+    // handoff should cut a turn short for.
+    return false;
   }
 
   hasPendingConfirmation(requestId: string): boolean {
@@ -2906,132 +2852,6 @@ export class Conversation {
     onEvent?: (msg: AssistantEvent) => void,
   ): Promise<ContextWindowResult> {
     return this.runUserCompaction(() => this.runCompaction(true), onEvent);
-  }
-
-  /**
-   * "Summarize up to here": summarize everything before the turn containing
-   * `beforeMessageId`, keeping that turn and everything after it verbatim.
-   * Runs the same durable compaction pipeline as {@link forceCompact} but
-   * with a caller-fixed tail boundary instead of the token-budget cut.
-   *
-   * Owner self-maintenance operates on the full (guardian) history, so an
-   * untrusted trust context is temporarily swapped for the internal guardian
-   * context and restored afterward — the same idiom as
-   * `resolveMetaSlashCommand`. Throws {@link UserError} (messages are
-   * user-facing) when the boundary cannot be resolved or the row→history
-   * index mapping cannot be verified.
-   *
-   * `onEvent` is the sink for the context-window usage push. The management
-   * route that owns this action resolves its conversation outside the send
-   * path, so the instance can still hold the store's no-op sender; it passes
-   * the same broadcast path its result card goes out on.
-   */
-  async summarizeUpToMessage(
-    beforeMessageId: string,
-    onEvent?: (msg: AssistantEvent) => void,
-  ): Promise<ContextWindowResult> {
-    const priorTrustContext = this.trustContext;
-    if (!resolveCapabilities(priorTrustContext?.trustClass).canAccessMemory) {
-      this.setTrustContext(INTERNAL_GUARDIAN_TRUST_CONTEXT);
-    }
-    try {
-      // Fresh guardian-scoped load so `this.messages`, the row set, and the
-      // row→history mapping all describe the same instant (rare user action;
-      // the reload cost is acceptable).
-      const { rows, rowToHistoryIndex } = await this.loadFromDb();
-      const { boundaryRowIndex } = resolveSummarizeBoundary(
-        rows,
-        beforeMessageId,
-        this.contextCompactedMessageCount,
-      );
-      // Row-space → history-space via the load's own mapping, which folds in
-      // history-repair merges/insertions and injection-strip drops. Offset
-      // arithmetic would drift by one for every repair upstream of the
-      // boundary — e.g. the user(tool_result-only) + user(text) row pair an
-      // awaiting-user-action surface pause persists, which repair merges into
-      // a single in-memory message.
-      const tailIndex = rowToHistoryIndex?.[boundaryRowIndex] ?? null;
-      const boundaryRow = rows[boundaryRowIndex];
-      const mapped: Message | undefined =
-        tailIndex == null ? undefined : this.messages[tailIndex];
-      const rowText = firstPersistedTextBlockText(boundaryRow.content);
-      // Injection rehydration PREPENDS blocks to user messages, and repair
-      // can merge a preceding continuation row's blocks in front of the
-      // boundary row's, so the row's text must appear somewhere among the
-      // mapped message's text blocks — never assume block 0. A mismatch
-      // means the in-memory view diverged from the mapping's invariants;
-      // fail safe rather than summarize at the wrong boundary.
-      const matches =
-        mapped !== undefined &&
-        mapped.role === boundaryRow.role &&
-        (rowText === null ||
-          mapped.content.some(
-            (b) => b.type === "text" && b.text.includes(rowText),
-          ));
-      if (rowToHistoryIndex == null || tailIndex == null || !matches) {
-        log.warn(
-          {
-            conversationId: this.conversationId,
-            beforeMessageId,
-            boundaryRowIndex,
-            tailIndex,
-            rowRole: boundaryRow.role,
-            mappedRole: mapped?.role,
-            rowCount: rows.length,
-            historyLength: this.messages.length,
-            contextCompactedMessageCount: this.contextCompactedMessageCount,
-          },
-          "summarizeUpToMessage: row→history boundary mapping mismatch",
-        );
-        throw new UserError(
-          "Conversation history is being reorganized — try again in a moment",
-        );
-      }
-      // Everything between the compacted watermark and the clicked turn
-      // lives inside the boundary's own merged message (at most the summary
-      // head precedes it) — there is no earlier content to summarize.
-      if (tailIndex <= (this.contextSummary?.trim() ? 1 : 0)) {
-        throw new UserError("Nothing to summarize before this message");
-      }
-      // First persisted row contributing to each in-memory message — the
-      // inverse of `rowToHistoryIndex` (descending walk so the earliest row
-      // wins a merged message's slot; summary-head/synthetic entries stay
-      // null). The compaction pipeline derives its persisted and Slack
-      // watermarks from this against the cut the compactor ACTUALLY uses,
-      // which may retreat from the requested boundary for tool pairing.
-      const firstRowByHistoryIndex: (number | null)[] = new Array(
-        this.messages.length,
-      ).fill(null);
-      for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex--) {
-        const historyIndex = rowToHistoryIndex[rowIndex];
-        if (historyIndex != null) {
-          firstRowByHistoryIndex[historyIndex] = rowIndex;
-        }
-      }
-      return await this.runUserCompaction(
-        () =>
-          this.runCompaction(true, undefined, {
-            fixedTailStartIndex: tailIndex,
-            // When repair merged preceding continuation rows into the
-            // boundary's message, the row boundary retreats to the message's
-            // first contributing row: the summary call reads
-            // messages[0..tailIndex), which excludes the merged rows' content,
-            // so the image manifest and watermarks must not treat them as
-            // summarized.
-            fixedBoundaryRowIndex:
-              firstRowByHistoryIndex[tailIndex] ?? boundaryRowIndex,
-            fixedBoundaryRowView: { rows, firstRowByHistoryIndex },
-          }),
-        onEvent,
-      );
-    } finally {
-      // Only undo the temporary guardian context this method installed. If
-      // trustContext was legitimately updated at an `await` boundary, the
-      // reference differs and is left alone.
-      if (this.trustContext === INTERNAL_GUARDIAN_TRUST_CONTEXT) {
-        this.setTrustContext(priorTrustContext ?? null);
-      }
-    }
   }
 
   /**

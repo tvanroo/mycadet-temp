@@ -4,18 +4,23 @@ import {
   selectedAssistantId,
 } from "./assistant-selection";
 
-test("route selection is scoped to its API base", () => {
-  const host = {
-    cloudUrl: "https://host.example/admin/",
-  };
-  const state = assistantSelectionState("assistant-2", host);
-  expect(selectedAssistantId(state, host)).toBe("assistant-2");
+test("selection state carries just the assistant id", () => {
+  const state = assistantSelectionState("assistant-2");
+  expect(state.assistantSelection.id).toBe("assistant-2");
+  expect(selectedAssistantId(state)).toBe("assistant-2");
+});
+
+test("legacy state carrying an old api-base tag still resolves", () => {
+  // Selections written before the same-origin flip tagged the api base;
+  // zod strips unknown keys, so stale tags resolve like any other state.
   expect(
-    selectedAssistantId(state, { ...host, cloudUrl: "/" }),
-  ).toBeUndefined();
-  expect(
-    selectedAssistantId(assistantSelectionState("assistant-1", {}), {}),
-  ).toBe("assistant-1");
+    selectedAssistantId({
+      assistantSelection: {
+        id: "assistant-2",
+        apiBaseUrl: "https://cloud.mycadet.ai",
+      },
+    }),
+  ).toBe("assistant-2");
 });
 
 test("malformed browser history never supplies an assistant selection", () => {
@@ -23,9 +28,9 @@ test("malformed browser history never supplies an assistant selection", () => {
     null,
     {},
     { assistantSelection: null },
-    { assistantSelection: { id: 123, apiBaseUrl: "/" } },
-    { assistantSelection: { id: "", apiBaseUrl: "/" } },
+    { assistantSelection: { id: 123 } },
+    { assistantSelection: { id: "" } },
   ]) {
-    expect(selectedAssistantId(value, {})).toBeUndefined();
+    expect(selectedAssistantId(value)).toBeUndefined();
   }
 });

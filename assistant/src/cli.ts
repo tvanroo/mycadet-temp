@@ -571,12 +571,7 @@ export async function startCli(): Promise<void> {
           } else {
             for (const msg of rawMessages) {
               const parsedContent: unknown = msg.content;
-              const text = renderHistoryContent(
-                parsedContent,
-                undefined,
-                undefined,
-                msg.metadata,
-              ).text;
+              const text = renderHistoryContent(parsedContent).text;
               const label = msg.role === "user" ? "you" : "assistant";
               const preview = truncate(text, 120);
               process.stdout.write(

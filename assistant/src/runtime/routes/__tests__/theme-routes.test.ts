@@ -44,11 +44,11 @@ describe("GET /workspace/theme", () => {
     mkdirSync(join(workspaceDir, "ui"), { recursive: true });
     writeFileSync(
       join(workspaceDir, "ui", "theme.json"),
-      JSON.stringify({ version: 1, base: "velvet" }),
+      JSON.stringify({ version: 1, base: "dark" }),
     );
     const result = getThemeHandler()();
     expect(result.source).toBe("workspace");
-    expect(result.theme).toEqual({ version: 1, base: "velvet" });
+    expect(result.theme).toEqual({ version: 1, base: "dark" });
     expect(result.issues).toEqual([]);
   });
 

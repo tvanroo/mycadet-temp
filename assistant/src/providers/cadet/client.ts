@@ -1,7 +1,4 @@
-import { getWorkspaceDir } from "../../util/layout.js";
 import { OpenAIChatCompletionsProvider } from "../openai/chat-completions-provider.js";
-import type { SendMessageOptions } from "../types.js";
-import { hostedDirectionsExtraBody } from "./personality-directions.js";
 
 export interface CadetProviderOptions {
   apiKey?: string;
@@ -28,15 +25,5 @@ export class CadetProvider extends OpenAIChatCompletionsProvider {
       omitToolChoiceWhenReasoning: true,
       ...(options.baseURL ? { baseURL: options.baseURL } : {}),
     });
-  }
-
-  protected override buildRequestExtraBody(
-    options?: SendMessageOptions,
-  ): Record<string, unknown> | undefined {
-    const config = options?.config as { model?: string } | undefined;
-    return hostedDirectionsExtraBody(
-      config?.model ?? this.defaultModel,
-      getWorkspaceDir(),
-    );
   }
 }

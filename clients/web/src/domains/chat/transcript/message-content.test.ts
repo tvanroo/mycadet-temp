@@ -5,7 +5,6 @@ import type { Surface } from "@/domains/chat/types/types";
 import type { ConversationContentBlock } from "@mycadet/assistant-api";
 import {
   activityHasDedicatedCard,
-  activityItemsToCardData,
   type ContentBlockGroup,
   finalResponseStartIndex,
   groupContentBlocks,
@@ -15,7 +14,6 @@ import {
   isBackgroundBashCall,
   isRunWorkflowCall,
   isSubagentSpawnCall,
-  isSuppressedUiTool,
   isTaskProgressSurface,
 } from "@/domains/chat/transcript/message-content";
 import { extractBgIdFromResult } from "@/domains/chat/transcript/transcript-message-body-shared";
@@ -474,50 +472,6 @@ describe("extractBgIdFromResult", () => {
   });
 });
 
-describe("isSuppressedUiTool", () => {
-  test("suppresses ui_* tools without pending confirmation", () => {
-    expect(isSuppressedUiTool(toolCall({ id: "x", name: "ui_show" }))).toBe(
-      true,
-    );
-    expect(isSuppressedUiTool(toolCall({ id: "x", name: "ui_update" }))).toBe(
-      true,
-    );
-    expect(isSuppressedUiTool(toolCall({ id: "x", name: "ui_dismiss" }))).toBe(
-      true,
-    );
-  });
-
-  test("suppresses send_user_message, which renders as the prose it carries", () => {
-    expect(
-      isSuppressedUiTool(toolCall({ id: "x", name: "send_user_message" })),
-    ).toBe(true);
-    // Suppressed even carrying a confirmation: the tool has no confirmation
-    // policy, so a chip for it would only ever duplicate the reply.
-    expect(
-      isSuppressedUiTool(
-        toolCall({
-          id: "x",
-          name: "send_user_message",
-          pendingConfirmation: { requestId: "req-1" },
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  test("does not suppress ui_* with a pending confirmation, or non-ui tools", () => {
-    expect(
-      isSuppressedUiTool(
-        toolCall({
-          id: "x",
-          name: "ui_show",
-          pendingConfirmation: { requestId: "req-1" },
-        }),
-      ),
-    ).toBe(false);
-    expect(isSuppressedUiTool(toolCall({ id: "x", name: "bash" }))).toBe(false);
-  });
-});
-
 describe("isTaskProgressSurface", () => {
   test("true for task_progress with a non-empty steps array", () => {
     expect(
@@ -722,97 +676,14 @@ describe("activityHasDedicatedCard", () => {
   });
 });
 
-describe("send_user_message in the transcript projection", () => {
-  test("opens no activity group of its own", () => {
-    // GIVEN the live block order of a tool-gated turn: the reply arrives as a
-    // text delta, then the call that carried it
-    const blocks: ConversationContentBlock[] = [
-      { type: "text", text: "Here you go." },
-      {
-        type: "tool_use",
-        toolCall: toolCall({ id: "call-send", name: "send_user_message" }),
-      },
-    ];
-
-    // WHEN grouped
-    // THEN only the prose survives. A trailing activity run would draw a
-    // shimmering "Thinking" row under the reply while streaming.
-    expect(groupContentBlocks(blocks)).toEqual([
-      { type: "text", text: "Here you go." },
-    ]);
-  });
-
-  test("does not split the activity run around it", () => {
-    // GIVEN work either side of a reply the model sent mid-turn
-    const blocks: ConversationContentBlock[] = [
-      { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
-      {
-        type: "tool_use",
-        toolCall: toolCall({ id: "call-send", name: "send_user_message" }),
-      },
-      { type: "tool_use", toolCall: toolCall({ id: "call-b" }) },
-    ];
-
-    // WHEN grouped
-    // THEN the two real steps merge into one run, as they would had the reply
-    // never been sent
-    expect(groupContentBlocks(blocks)).toEqual([
-      {
-        type: "activity",
-        items: [
-          { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
-          { type: "tool_use", toolCall: toolCall({ id: "call-b" }) },
-        ],
-      },
-    ]);
-  });
-
-  test("counts no step and draws no chip when it reaches the card data", () => {
-    const { cardItems, toolCalls } = activityItemsToCardData([
-      { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
-      {
-        type: "tool_use",
-        toolCall: toolCall({ id: "call-send", name: "send_user_message" }),
-      },
-    ]);
-
-    expect(toolCalls.map((tc) => tc.id)).toEqual(["call-a"]);
-    expect(cardItems).toEqual([
-      { kind: "toolCall", toolCall: toolCall({ id: "call-a" }) },
-    ]);
-  });
-});
-
-describe("a private row's reasoning", () => {
+describe("an assistant row's reasoning", () => {
   const blocks: ConversationContentBlock[] = [
     { type: "thinking", thinking: "let me look that up" },
     { type: "tool_use", toolCall: toolCall({ id: "call-a", name: "bash" }) },
     { type: "text", text: "Here you go." },
   ];
 
-  test("is dropped from the projection, leaving the work it did", () => {
-    const groups = groupContentBlocks(
-      blocks,
-      groupOptionsForMessage({
-        role: "assistant",
-        assistantTextVisibility: "private",
-      }),
-    );
-    expect(groups).toEqual([
-      {
-        type: "activity",
-        items: [
-          {
-            type: "tool_use",
-            toolCall: toolCall({ id: "call-a", name: "bash" }),
-          },
-        ],
-      },
-      { type: "text", text: "Here you go." },
-    ]);
-  });
-
-  test("survives on a row carrying no marker", () => {
+  test("groups the reasoning beside the work", () => {
     const groups = groupContentBlocks(
       blocks,
       groupOptionsForMessage({ role: "assistant" }),
@@ -838,7 +709,7 @@ describe("a private row's reasoning", () => {
     expect(hasRenderedStepStack({ toolCalls: [] })).toBe(false);
     expect(
       hasRenderedStepStack({
-        toolCalls: [{ name: "send_user_message" }, { name: "remember" }],
+        toolCalls: [{ name: "remember" }, { name: "skill_load" }],
       }),
     ).toBe(false);
     expect(
@@ -852,48 +723,9 @@ describe("a private row's reasoning", () => {
     // The inline link defers the dots row only when it actually renders.
     expect(
       hasRenderedThinking({
-        role: "assistant",
-        assistantTextVisibility: "private",
-        contentBlocks: [{ type: "thinking", thinking: "let me look that up" }],
-      }),
-    ).toBe(false);
-    expect(
-      hasRenderedThinking({
-        role: "assistant",
         contentBlocks: [{ type: "thinking", thinking: "let me look that up" }],
       }),
     ).toBe(true);
-    expect(
-      hasRenderedThinking({
-        role: "assistant",
-        assistantTextVisibility: "private",
-        thinkingSegments: ["let me look that up"],
-      }),
-    ).toBe(false);
-  });
-
-  test("goes the same way for an unmarked row under the transcript-wide gate", () => {
-    expect(
-      groupOptionsForMessage({ role: "assistant" }, true).dropThinking,
-    ).toBe(true);
-    expect(hasRenderedThinking({ role: "assistant" }, true)).toBe(false);
-    expect(
-      groupContentBlocks(
-        blocks,
-        groupOptionsForMessage({ role: "assistant" }, true),
-      ),
-    ).toEqual([
-      {
-        type: "activity",
-        items: [
-          {
-            type: "tool_use",
-            toolCall: toolCall({ id: "call-a", name: "bash" }),
-          },
-        ],
-      },
-      { type: "text", text: "Here you go." },
-    ]);
   });
 
   test("a user row never splits its own inline tags", () => {
@@ -904,62 +736,8 @@ describe("a private row's reasoning", () => {
 });
 
 describe("silent tools in the transcript projection", () => {
-  /** The options a transcript rendered with the flag on projects a row with. */
-  const flagOn = groupOptionsForMessage({ role: "assistant" }, true);
-
-  test("a bookkeeping call after the reply opens no activity group", () => {
-    // GIVEN a delivered reply followed by the memory write the assistant made
-    // once it had answered
-    const blocks: ConversationContentBlock[] = [
-      { type: "text", text: "Here you go." },
-      {
-        type: "tool_use",
-        toolCall: toolCall({ id: "call-remember", name: "remember" }),
-      },
-    ];
-
-    // WHEN grouped with the flag on
-    // THEN only the prose survives. A trailing activity run would draw a
-    // "Noting dropped essay request" row under a finished answer.
-    expect(groupContentBlocks(blocks, flagOn)).toEqual([
-      { type: "text", text: "Here you go." },
-    ]);
-  });
-
-  test("does not split the activity run around one", () => {
-    // GIVEN real work either side of a memory write
-    const blocks: ConversationContentBlock[] = [
-      { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
-      {
-        type: "tool_use",
-        toolCall: toolCall({ id: "call-remember", name: "remember" }),
-      },
-      { type: "tool_use", toolCall: toolCall({ id: "call-b" }) },
-    ];
-
-    // WHEN grouped with the flag on
-    // THEN the two real steps merge into one run, so the step count reads 2
-    const groups = groupContentBlocks(blocks, flagOn);
-    expect(groups).toEqual([
-      {
-        type: "activity",
-        items: [
-          { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
-          { type: "tool_use", toolCall: toolCall({ id: "call-b" }) },
-        ],
-      },
-    ]);
-    const group = groups[0];
-    expect(group?.type === "activity" ? group.items : []).toHaveLength(2);
-    expect(
-      activityItemsToCardData(
-        group?.type === "activity" ? group.items : [],
-      ).toolCalls.map((tc) => tc.id),
-    ).toEqual(["call-a", "call-b"]);
-  });
-
-  test("keeps drawing every step with the flag off", () => {
-    // The flag-off transcript is untouched: the same blocks still group into
+  test("keeps drawing every step", () => {
+    // The transcript is untouched: the same blocks still group into
     // one run of three steps.
     const blocks: ConversationContentBlock[] = [
       { type: "tool_use", toolCall: toolCall({ id: "call-a" }) },
@@ -977,37 +755,6 @@ describe("silent tools in the transcript projection", () => {
     expect(group?.type === "activity" ? group.items : []).toHaveLength(3);
   });
 
-  test("keeps a surface tool carrying a pending confirmation", () => {
-    // The chip is where the inline confirmation card renders, so dropping the
-    // call would leave the user nothing to answer.
-    const blocks: ConversationContentBlock[] = [
-      {
-        type: "tool_use",
-        toolCall: toolCall({
-          id: "call-ui",
-          name: "ui_show",
-          pendingConfirmation: { requestId: "req-1" },
-        }),
-      },
-    ];
-
-    expect(groupContentBlocks(blocks, flagOn)).toEqual([
-      {
-        type: "activity",
-        items: [
-          {
-            type: "tool_use",
-            toolCall: toolCall({
-              id: "call-ui",
-              name: "ui_show",
-              pendingConfirmation: { requestId: "req-1" },
-            }),
-          },
-        ],
-      },
-    ]);
-  });
-
   test("keeps the work the user asked for", () => {
     const blocks: ConversationContentBlock[] = [
       {
@@ -1020,7 +767,7 @@ describe("silent tools in the transcript projection", () => {
       },
     ];
 
-    const group = groupContentBlocks(blocks, flagOn)[0];
+    const group = groupContentBlocks(blocks)[0];
     expect(group?.type === "activity" ? group.items : []).toHaveLength(2);
   });
 });

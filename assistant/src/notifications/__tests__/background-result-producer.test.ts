@@ -573,7 +573,6 @@ describe("background result ownership", () => {
     "wrong parent",
     "failed child",
     "seen result",
-    "private result",
     "parent delivered",
     "child delivered",
     "scheduled owner",
@@ -591,11 +590,6 @@ describe("background result ownership", () => {
         break;
       case "seen result":
         attention.lastSeenAssistantMessageAt = startedAt + 100;
-        break;
-      case "private result":
-        rows.get("result")!.metadata = JSON.stringify({
-          assistantTextVisibility: "private",
-        });
         break;
       case "parent delivered":
         notifiedContexts.add(conversationId);
@@ -894,26 +888,6 @@ describe("background result ownership", () => {
       "Here are the completed findings.",
     );
   });
-  test("seen public output is not reannounced through a later private wrap-up", async () => {
-    rows.delete("result");
-    rows.set(
-      "visible-result",
-      row("visible-result", "assistant", "Visible findings", 150),
-    );
-    rows.set(
-      "result",
-      row("result", "assistant", "Private wrap-up", 200, {
-        assistantTextVisibility: "private",
-      }),
-    );
-    attention.lastSeenAssistantMessageAt = startedAt + 150;
-    finishSiblingCommand("failed");
-    await emit({
-      userMessageId: "later-trigger",
-      assistantMessageId: "later-result",
-    });
-    expect(signals).toHaveLength(0);
-  });
   test("a newer human prompt prevents a stale wake from recovering an old result", async () => {
     finishSiblingCommand("failed");
     rows.set("new-request", row("new-request", "user", "Another request", 500));
@@ -963,24 +937,6 @@ describe("background result ownership", () => {
     await emit();
 
     expect(signals).toHaveLength(0);
-  });
-
-  test("private wrap-up uses the earlier user-facing result", async () => {
-    rows.delete("result");
-    rows.set(
-      "visible-result",
-      row("visible-result", "assistant", "The requested findings.", 150),
-    );
-    rows.set(
-      "result",
-      row("result", "assistant", "Private reasoning", 200, {
-        assistantTextVisibility: "private",
-      }),
-    );
-    await emit();
-    expect(signals[0].contextPayload?.requestedMessage).toBe(
-      "The requested findings.",
-    );
   });
 
   test("delegated result uses its parent's persisted copy and stable task identity", async () => {
@@ -1124,26 +1080,6 @@ describe("background result ownership", () => {
       expect(signals).toHaveLength(1);
     },
   );
-  test("empty, private-only, unfinalized, and seen results stay quiet", async () => {
-    rows.set("result", row("result", "assistant", "", 200));
-    await emit();
-    rows.set(
-      "result",
-      row("result", "assistant", "private notes", 200, {
-        assistantTextVisibility: "private",
-      }),
-    );
-    await emit();
-    rows.set("result", {
-      ...row("result", "assistant", "Result", 200),
-      finalized: 0,
-    });
-    await emit();
-    rows.set("result", row("result", "assistant", "Result", 200));
-    attention.lastSeenAssistantMessageAt = attention.latestAssistantMessageAt;
-    await emit();
-    expect(signals).toHaveLength(0);
-  });
   test("a newer result does not reannounce an older continuation", async () => {
     attention.latestAssistantMessageId = "newer-result";
     await emit();

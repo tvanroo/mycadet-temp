@@ -19,7 +19,6 @@ import type { Conversation } from "@/types/conversation-types";
 import {
   conversationsByIdRetryPost,
   conversationsForkPost,
-  conversationsSummarizePost,
 } from "@/generated/daemon/sdk.gen";
 import { ApiError } from "@/utils/api-errors";
 import { isElectron } from "@/runtime/is-electron";
@@ -28,8 +27,8 @@ import { navigateToConversation } from "@/utils/conversation-navigation";
 import { routes } from "@/utils/routes";
 import { haptic } from "@/utils/haptics";
 import { messagePlainText } from "@/domains/chat/utils/message-plain-text";
-import { useTranscriptMessages } from "@/domains/chat/transcript/use-transcript-messages";
 import type { DisplayMessage } from "@/domains/chat/types/types";
+import { useTranscriptMessages } from "@/domains/chat/transcript/use-transcript-messages";
 import { useResolvedAssistantsStore } from "@/stores/resolved-assistants-store";
 import { useConversationStore } from "@/stores/conversation-store";
 import { useAssistantIdentityStore } from "@/stores/assistant-identity-store";
@@ -50,11 +49,10 @@ export interface UseConversationSecondaryActionsParams {
 export interface UseConversationSecondaryActionsReturn {
   handleForkConversation: (throughMessageId: string) => Promise<void>;
   handleForkConversationFromMenu: () => void;
-  handleSummarizeUpToMessage: (beforeMessageId: string) => Promise<void>;
   handleRetryLatestTurn: () => Promise<void>;
-  handleOpenInNewWindow: (conversation: Conversation) => void;
   handleInspectConversation: (conversation: Conversation) => void;
   handleInspectMessage: (messageId: string) => void;
+  handleOpenInNewWindow: (conversation: Conversation) => void;
   handleCopyConversation: () => void;
 }
 
@@ -133,45 +131,11 @@ export function useConversationSecondaryActions({
     [refreshConversations, navigate],
   );
 
-  // Asks the daemon to summarize everything before `beforeMessageId` in the
-  // assistant's working memory. Fire-and-forget from the client's point of
-  // view: the daemon acknowledges with 202 and progress/result arrive through
-  // the existing turn SSE events, so there is no navigation, list refresh, or
-  // history invalidation here.
-  const handleSummarizeUpToMessage = useCallback(
-    async (beforeMessageId: string) => {
-      const assistantId =
-        useResolvedAssistantsStore.getState().activeAssistantId;
-      const activeConversationId =
-        useConversationStore.getState().activeConversationId;
-      if (!assistantId || !activeConversationId) {
-        return;
-      }
-      haptic.light();
-
-      try {
-        await conversationsSummarizePost({
-          path: { assistant_id: assistantId },
-          body: { conversationId: activeConversationId, beforeMessageId },
-          throwOnError: true,
-        });
-      } catch (err) {
-        captureError(err, { context: "summarize_up_to_here" });
-        toast.error(
-          err instanceof ApiError && err.status === 409
-            ? t("chat:useConversationSecondaryActions.assistantBusy")
-            : t("chat:useConversationSecondaryActions.summarizeFailed"),
-        );
-      }
-    },
-    [],
-  );
-
   // Discards the latest assistant display turn and re-runs generation from
-  // its user message. Fire-and-forget like summarize: the daemon acknowledges
-  // with 202, the regenerated turn streams over the existing SSE events, and
-  // the discarded rows disappear via the messages sync invalidation — no
-  // local state to update here.
+  // its user message. Fire-and-forget: the daemon acknowledges with 202, the
+  // regenerated turn streams over the existing SSE events, and the discarded
+  // rows disappear via the messages sync invalidation — no local state to
+  // update here.
   const handleRetryLatestTurn = useCallback(async () => {
     const assistantId = useResolvedAssistantsStore.getState().activeAssistantId;
     const activeConversationId =
@@ -214,14 +178,13 @@ export function useConversationSecondaryActions({
   }, []);
 
   // Navigate to the per-conversation LLM context inspector. The
-  // conversation lives in the path;
-  // `?messageId=` scopes to one turn. A turn is headed by its user
-  // message, so we always seed the scope with a user message id — the
-  // inspector's filter dropdown only lists user-headed turns. We default
-  // to the most recent turn, but only when the target conversation is
-  // the currently active one — the chat session store always holds the
-  // active transcript, so using it for a different conversation would
-  // produce a mismatched (conversationId, messageId) pair and show the
+  // conversation lives in the path; `?messageId=` scopes to one turn. A turn
+  // is headed by its user message, so we always seed the scope with a user
+  // message id — the inspector's filter dropdown only lists user-headed
+  // turns. We default to the most recent turn, but only when the target
+  // conversation is the currently active one — the chat session store always
+  // holds the active transcript, so using it for a different conversation
+  // would produce a mismatched (conversationId, messageId) pair and show the
   // wrong LLM context in the inspector.
   const handleInspectConversation = useCallback(
     (conversation: Conversation) => {
@@ -290,11 +253,10 @@ export function useConversationSecondaryActions({
   return {
     handleForkConversation,
     handleForkConversationFromMenu,
-    handleSummarizeUpToMessage,
     handleRetryLatestTurn,
-    handleOpenInNewWindow,
     handleInspectConversation,
     handleInspectMessage,
+    handleOpenInNewWindow,
     handleCopyConversation,
   };
 }

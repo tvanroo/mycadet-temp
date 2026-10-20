@@ -8,7 +8,6 @@ import { expireInteractionBoundGuardianRequests } from "../channels/gateway-guar
 import { isCloudClientConfigured } from "../cloud/client.js";
 import { startConsentRefresh } from "../cloud/consent-cache.js";
 import { syncWorkspaceIdentityToPlatform } from "../cloud/sync-identity.js";
-import { initFeatureFlagOverrides } from "../config/assistant-feature-flags.js";
 import { setIngressPublicBaseUrl, validateEnv } from "../config/env.js";
 import {
   getConfig,
@@ -16,14 +15,11 @@ import {
   mergeDefaultWorkspaceConfig,
 } from "../config/loader.js";
 import { seedInferenceProfiles } from "../config/seed-inference-profiles.js";
-import { reconcileFlagGatedProfiles } from "../config/sync-gated-profiles.js";
-import { startConversationAutoArchive } from "../conversations/auto-archive.js";
 import { startCes } from "../credential-execution/ces-runtime.js";
 import { refreshManagedConnectionCache } from "../credential-execution/cloud-catalog.js";
 import { startHeartbeatService } from "../heartbeat/heartbeat-service.js";
 import { backfillRelationshipStateIfMissing } from "../home/relationship-state-writer.js";
 import { startCliIpcServer } from "../ipc/assistant-server.js";
-import { startGatewayFlagListener } from "../ipc/gateway-flag-listener.js";
 import { startMonitoring } from "../monitoring/control.js";
 import { recordDaemonBootTime } from "../monitoring/daemon-boot-time.js";
 import { backfillManualTokenConnections } from "../oauth/manual-token-connection.js";
@@ -50,7 +46,6 @@ import {
 } from "../runtime/http-server.js";
 import { warmLocalGuardianPrincipalCache } from "../runtime/local-actor-identity.js";
 import { markCurrentProcessAsMainDaemon } from "../runtime/process-role.js";
-import { publishConfigChanged } from "../runtime/sync/resource-sync-events.js";
 import { reconcilePluginSchedules } from "../schedule/plugin-schedule-reconciler.js";
 import { recoverStaleSchedules } from "../schedule/schedule-recovery.js";
 import { startScheduler } from "../schedule/scheduler.js";
@@ -189,35 +184,6 @@ export async function runDaemon(): Promise<void> {
   void isCloudClientConfigured().catch((err) =>
     log.warn({ err }, "Platform configured-probe warmup failed"),
   );
-
-  // Pre-populate feature flag overrides so subsequent sync
-  // isAssistantFeatureFlagEnabled() calls have data. Fired non-blocking
-  // so a slow or unreachable gateway doesn't delay daemon startup (the
-  // IPC call has a 3s connect + 5s call timeout that would otherwise
-  // stall the critical path).
-  // After the async fetch resolves, reconcile flag-gated cloud profiles
-  // (OS Beta): `seedInferenceProfiles()` runs synchronously earlier in boot
-  // before flags are available, so this lands the profile on the same boot once
-  // the flag cache is populated. When this reconcile is the call that mutates
-  // config (it raced ahead of the gateway flag listener), publish the config
-  // invalidation so any client that already fetched `GET /v1/config` refreshes
-  // its profile picker.
-  // Profiles are reconciled only when flags actually loaded from the gateway:
-  // a failed fetch leaves the cache unset and resolves `os-beta` to its
-  // registry default `false`, which would remove the user's profile and reset
-  // their selection.
-  void initFeatureFlagOverrides()
-    .then((loaded) => {
-      if (!loaded) {
-        return;
-      }
-      if (reconcileFlagGatedProfiles()) {
-        publishConfigChanged();
-      }
-    })
-    .catch((err) => log.warn({ err }, "Background feature flag init failed"));
-
-  startGatewayFlagListener();
 
   log.info("Daemon startup: initializing DB");
   ensurePromptFiles();
@@ -821,15 +787,15 @@ export async function runDaemon(): Promise<void> {
   // CES, which the startup sequence above just brought up. Fire-and-forget:
   // the resumes run sequentially in the background while the daemon serves
   // requests; per-conversation failures are logged inside.
-  let startupRecovery = Promise.resolve();
   if (conversationsToResume.length > 0) {
     log.info(
       { count: conversationsToResume.length },
       "Resuming conversations interrupted by the previous process",
     );
-    startupRecovery = resumeInterruptedConversations(conversationsToResume);
+    // Fire-and-forget: the recovery promise was only awaited by the
+    // auto-archive worker's first sweep; nothing else consumes it.
+    void resumeInterruptedConversations(conversationsToResume);
   }
-  startConversationAutoArchive(startupRecovery);
 
   log.info(
     {

@@ -46,7 +46,6 @@ import {
   conversationAssistantAttentionState,
   conversations,
 } from "./schema/index.js";
-import { projectPersistedRowText } from "./user-facing-content.js";
 
 const log = getLogger("conversation-store");
 
@@ -1088,13 +1087,7 @@ export async function searchConversations(
       matchingMessages: matchingMsgs.map((m) => ({
         messageId: m.id,
         role: m.role,
-        // The excerpt is shown to the user, so it quotes what the row's own
-        // marker says the user saw: a `send_user_message` turn's plain text is
-        // private working notes and never surfaces here.
-        excerpt: buildExcerpt(
-          projectPersistedRowText(m.content, m.metadata),
-          query,
-        ),
+        excerpt: buildExcerpt(m.content, query),
         createdAt: m.created_at,
       })),
     });

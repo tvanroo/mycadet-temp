@@ -58,6 +58,10 @@ export const AssistantChoiceSchema = z.object({
     .string()
     .nullish()
     .transform((name) => name?.trim() || "New Assistant"),
+  /** The cloud's synced avatar thumbnail; null means the cloud holds none. */
+  avatar_url: z.string().nullish(),
+  /** When the cloud hatched the assistant (ISO 8601); null when unknown. */
+  created: z.string().nullish(),
 });
 
 export const AssistantResolutionSchema = z.discriminatedUnion("status", [

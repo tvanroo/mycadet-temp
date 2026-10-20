@@ -117,8 +117,6 @@ export interface CatalogModel {
    * Not projected into the client catalog (see scripts/sync-llm-catalog.ts).
    */
   supportsPromptCacheBreakpoints?: boolean;
-  /** When set, this model is only visible when the named feature flag is enabled. */
-  featureFlag?: string;
 }
 
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 200000;
@@ -171,8 +169,6 @@ export interface ProviderCatalogEntry {
    * OpenRouter where managed keys are not available.
    */
   supportsCloudAuth?: boolean;
-  /** When set, this provider is only visible when the named feature flag is enabled. */
-  featureFlag?: string;
 }
 
 /**
@@ -2898,22 +2894,28 @@ const RAW_PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     setupMode: "api-key",
     setupHint:
       "Uses the assistant API key through the Cadet Cloud connection. These models cannot use a bring-your-own key.",
-    featureFlag: "cadet-hosted-inference",
     models: [
       {
-        id: "qwen/qwen3-8b",
-        displayName: "Qwen3 8B",
-        contextWindowTokens: 32768,
-        maxOutputTokens: 32768,
-        supportsThinking: false,
-        supportsCaching: false,
-        supportsVision: false,
+        id: "accounts/fireworks/models/glm-5p3-flash",
+        displayName: "GLM 5.3 Flash",
+        contextWindowTokens: 1040000,
+        maxOutputTokens: 131072,
+        supportsThinking: true,
+        // Same always-on reasoning as GLM 5.3.
+        adaptiveThinkingOnly: true,
+        supportsCaching: true,
+        supportsVision: true,
         supportsToolUse: true,
-        pricing: { inputPer1mTokens: 0.3, outputPer1mTokens: 0.3 },
-        featureFlag: "cadet-hosted-inference",
+        maxEffort: "max",
+        supportedEfforts: ["low", "high", "max"],
+        pricing: {
+          inputPer1mTokens: 0.15,
+          outputPer1mTokens: 0.5,
+          cacheReadPer1mTokens: 0.029,
+        },
       },
     ],
-    defaultModel: "qwen/qwen3-8b",
+    defaultModel: "accounts/fireworks/models/glm-5p3-flash",
   },
 ];
 

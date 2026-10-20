@@ -848,8 +848,7 @@
     "dark": "深色",
     "label": "主題",
     "light": "淺色",
-    "system": "系統",
-    "velvet": "絲絨"
+    "system": "系統"
   },
   "ttsProviderForm": {
     "apiKey": "API 金鑰",

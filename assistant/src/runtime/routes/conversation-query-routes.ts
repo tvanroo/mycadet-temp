@@ -56,7 +56,6 @@ import {
 } from "../../config/schemas/llm.js";
 import { VALID_MEMORY_EMBEDDING_PROVIDERS } from "../../config/schemas/memory-storage.js";
 import { ServiceModeSchema } from "../../config/schemas/services.js";
-import { isSidebarDoneEnabled } from "../../config/sidebar-done-gate.js";
 import {
   describeShadowedConfigSet,
   findSubstrateShadowing,
@@ -158,7 +157,6 @@ import {
   getEffectiveProfilesForProvider,
   MANAGED_PROFILE_NAMES,
 } from "../../config/default-profile-catalog.js";
-import { DEFAULT_PROFILE_KEYS } from "../../config/default-profile-names.js";
 import { ACTOR_PRINCIPALS } from "../auth/route-policy.js";
 
 const RESERVED_PROFILE_NAMES = new Set([
@@ -941,20 +939,6 @@ async function handleReplaceInferenceProfile({
         `Duplicate it to a custom profile to customize.`,
     );
   }
-  // A flag-gated managed name (`os-beta`) with no materialized entry cannot
-  // be patched: it only resolves while the flag reconcile has created its
-  // stub, so writing status here would persist an entry that fights the
-  // reconcile. The always-available defaults are catalog-owned even when
-  // absent — a status re-enable on them just creates the thin stub.
-  if (
-    MANAGED_PROFILE_NAMES.has(name) &&
-    existingProfile == null &&
-    !(DEFAULT_PROFILE_KEYS as readonly string[]).includes(name)
-  ) {
-    throw new BadRequestError(
-      `Profile "${name}" is not currently available and cannot be edited.`,
-    );
-  }
   if (isCloud) {
     // Cloud profiles are daemon-seeded and read-only — enforce the contract
     // up front: the only body a cloud PUT accepts
@@ -1195,9 +1179,7 @@ async function handleSearchConversations({
     query: q,
     limit,
     maxMessagesPerConversation: maxMessages,
-    // Under `sidebar-done` a done chat is filed rather than hidden, so the
-    // agent's own history search reaches it the same way the user's does.
-    includeArchived: isSidebarDoneEnabled(),
+    includeArchived: false,
   });
   return { query: q, results };
 }
